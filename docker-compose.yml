@@ -80,6 +80,8 @@ services:
       - MINIO_ENDPOINT=minio:9000
       - MINIO_ACCESS_KEY=minioadmin
       - MINIO_SECRET_KEY=minioadmin
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+      - DEEPSEEK_GATEWAY_URL=http://deepseek-gateway:8787
       - DEBUG=true
     depends_on:
       db:
@@ -128,21 +130,22 @@ services:
     command: celery -A celery_worker.celery_app flower --port=5555
 
   # DeepSeek Gateway (Rust LLM Service)
+  # 需要先本地编译: cd services/deepseek-gateway && cargo build -p deepseek-app-server --release
   deepseek-gateway:
-    build:
-      context: ./services/deepseek-gateway
-      dockerfile: Dockerfile
+    image: debian:bookworm-slim
     container_name: spt-deepseek-gateway
     ports:
       - "8787:8787"
     environment:
-      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-sk-864d13feccf24173ade545c99934872b}
       - RUST_LOG=info
     volumes:
-      - ./services/deepseek-gateway/config.toml:/app/config.toml:ro
+      - ./services/deepseek-gateway/target/release/deepseek-app-server:/app/deepseek-app-server:ro
+      - ./services/deepseek-gateway-config/config.toml:/app/config.toml:ro
+    working_dir: /app
+    command: /app/deepseek-app-server --host 0.0.0.0 --port 8787 --config /app/config.toml
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8787/healthz"]
+      test: ["CMD-SHELL", "curl -f http://localhost:8787/healthz || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
