@@ -3,7 +3,7 @@ OCR 引擎统一入口
 支持多 provider 切换 + 自动降级（fallback）策略
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from app.ai.mathpix import MathpixClient
 from app.ai.openai_vision import OpenAIVisionClient
@@ -42,8 +42,8 @@ class OCREngine:
         self,
         image_bytes: bytes,
         subject_hint: str = "数学",
-        preferred_provider: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        preferred_provider: str | None = None,
+    ) -> dict[str, Any]:
         """
         分析试卷页面，输出结构化题目
 
@@ -118,8 +118,8 @@ class OCREngine:
         self,
         image_bytes: bytes,
         question_content: str = "",
-        preferred_provider: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        preferred_provider: str | None = None,
+    ) -> dict[str, Any]:
         """
         识别学生手写作答
 
@@ -193,8 +193,8 @@ class OCREngine:
         return ""
 
     def _get_provider_order(
-        self, preferred: Optional[str] = None
-    ) -> List[str]:
+        self, preferred: str | None = None
+    ) -> list[str]:
         """确定 provider 尝试顺序"""
         order = []
         if preferred and preferred in self.providers:

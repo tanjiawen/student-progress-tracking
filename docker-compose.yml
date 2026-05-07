@@ -137,7 +137,7 @@ services:
     ports:
       - "8787:8787"
     environment:
-      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-sk-864d13feccf24173ade545c99934872b}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
       - RUST_LOG=info
     volumes:
       - ./services/deepseek-gateway/target/release/deepseek-app-server:/app/deepseek-app-server:ro

@@ -3,11 +3,7 @@
 实现 BKT（贝叶斯知识追踪）简化变体 + ELO 变体 + 时间衰减
 """
 
-import math
-from datetime import datetime, timezone
-from typing import Dict, List, Optional, Tuple
-
-from app.core.exceptions import BadRequestException
+from datetime import UTC, datetime
 
 
 class KnowledgeState:
@@ -21,8 +17,8 @@ class KnowledgeState:
         total_attempts: int = 0,
         correct_count: int = 0,
         consecutive_correct: int = 0,
-        last_error_type: Optional[str] = None,
-        last_graded_at: Optional[datetime] = None,
+        last_error_type: str | None = None,
+        last_graded_at: datetime | None = None,
     ):
         self.student_id = student_id
         self.knowledge_point_id = knowledge_point_id
@@ -33,7 +29,7 @@ class KnowledgeState:
         self.last_error_type = last_error_type
         self.last_graded_at = last_graded_at
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "student_id": self.student_id,
             "knowledge_point_id": self.knowledge_point_id,
@@ -52,7 +48,7 @@ class KnowledgeState:
         if not self.last_graded_at:
             return self.mastery_probability
 
-        days_passed = (datetime.now(timezone.utc) - self.last_graded_at).total_seconds() / 86400
+        days_passed = (datetime.now(UTC) - self.last_graded_at).total_seconds() / 86400
         decay = 0.5 ** (days_passed / half_life_days)
         return self.mastery_probability * decay
 
@@ -90,7 +86,7 @@ class KnowledgeTracker:
 
     def __init__(self):
         # 内存中的状态缓存（实际应持久化到数据库）
-        self._states: Dict[Tuple[int, int], KnowledgeState] = {}
+        self._states: dict[tuple[int, int], KnowledgeState] = {}
 
     def get_state(
         self,
@@ -112,7 +108,7 @@ class KnowledgeTracker:
         student_id: int,
         knowledge_point_id: int,
         is_correct: bool,
-        error_type: Optional[str] = None,
+        error_type: str | None = None,
         question_difficulty: float = 1.0,
     ) -> KnowledgeState:
         """
@@ -166,15 +162,15 @@ class KnowledgeTracker:
             state.consecutive_correct = 0
             state.last_error_type = error_type
 
-        state.last_graded_at = datetime.now(timezone.utc)
+        state.last_graded_at = datetime.now(UTC)
 
         return state
 
     def batch_update(
         self,
         student_id: int,
-        results: List[Dict],
-    ) -> List[KnowledgeState]:
+        results: list[dict],
+    ) -> list[KnowledgeState]:
         """
         批量更新（一次考试后批量处理）
 
@@ -204,8 +200,8 @@ class KnowledgeTracker:
         self,
         student_id: int,
         top_k: int = 5,
-        subject_id: Optional[int] = None,
-    ) -> List[Dict]:
+        subject_id: int | None = None,
+    ) -> list[dict]:
         """
         获取学生的薄弱知识点
 
@@ -247,8 +243,8 @@ class KnowledgeTracker:
     def get_radar_data(
         self,
         student_id: int,
-        dimension_kps: Dict[str, List[int]],
-    ) -> List[Dict]:
+        dimension_kps: dict[str, list[int]],
+    ) -> list[dict]:
         """
         获取雷达图数据
 
@@ -277,8 +273,8 @@ class KnowledgeTracker:
         self,
         student_id: int,
         knowledge_point_id: int,
-        history: List[Dict],
-    ) -> List[Dict]:
+        history: list[dict],
+    ) -> list[dict]:
         """
         计算某知识点的掌握度变化趋势
 
@@ -309,9 +305,9 @@ class KnowledgeTracker:
 
     def calculate_class_heatmap(
         self,
-        student_ids: List[int],
-        knowledge_point_ids: List[int],
-    ) -> List[Dict]:
+        student_ids: list[int],
+        knowledge_point_ids: list[int],
+    ) -> list[dict]:
         """
         计算班级薄弱知识点热力图
 

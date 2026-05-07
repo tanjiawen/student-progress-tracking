@@ -1,12 +1,12 @@
 from datetime import timedelta
 from typing import Any
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends
 from fastapi.security import OAuth2PasswordRequestForm
 
 from app.core.config import settings
 from app.core.exceptions import UnauthorizedException
-from app.core.security import create_access_token, create_refresh_token, verify_password
+from app.core.security import create_access_token, create_refresh_token
 
 router = APIRouter()
 

@@ -1,4 +1,3 @@
-from typing import List, Optional
 
 from pydantic_settings import BaseSettings
 
@@ -21,7 +20,7 @@ class Settings(BaseSettings):
 
     # Qdrant
     QDRANT_URL: str = "http://localhost:6333"
-    QDRANT_API_KEY: Optional[str] = None
+    QDRANT_API_KEY: str | None = None
 
     # MinIO
     MINIO_ENDPOINT: str = "localhost:9000"
@@ -31,11 +30,11 @@ class Settings(BaseSettings):
     MINIO_SECURE: bool = False
 
     # AI
-    DEEPSEEK_API_KEY: Optional[str] = None
+    DEEPSEEK_API_KEY: str | None = None
     DEEPSEEK_BASE_URL: str = "https://api.deepseek.com"
-    OPENAI_API_KEY: Optional[str] = None
-    MATHPIX_APP_ID: Optional[str] = None
-    MATHPIX_API_KEY: Optional[str] = None
+    OPENAI_API_KEY: str | None = None
+    MATHPIX_APP_ID: str | None = None
+    MATHPIX_API_KEY: str | None = None
 
     # Embedding
     EMBEDDING_MODEL: str = "text-embedding-3-small"

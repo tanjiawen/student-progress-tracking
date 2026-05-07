@@ -4,11 +4,10 @@
 """
 
 import io
-import json
 import os
 import sys
 import unittest
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 # 确保项目根目录在路径中
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -17,9 +16,8 @@ from PIL import Image, ImageDraw, ImageFont
 
 from app.services.grading_engine import grading_engine
 from app.services.knowledge_tracker import knowledge_tracker
-from app.services.layout_parser import ParsedQuestion, layout_parser
+from app.services.layout_parser import layout_parser
 from app.services.pdf_service import pdf_service
-from app.services.storage_service import StorageService
 
 
 class TestCorePipeline(unittest.TestCase):
@@ -310,7 +308,7 @@ class TestCorePipeline(unittest.TestCase):
         print(f"   ✅ 第二次答对后: {state.mastery_probability:.4f}")
 
         # 连续答对 3 次
-        for i in range(3):
+        for _i in range(3):
             state = knowledge_tracker.update_from_grading(
                 student_id=student_id,
                 knowledge_point_id=kp_id,
@@ -361,7 +359,7 @@ class TestCorePipeline(unittest.TestCase):
                 state.mastery_probability = min(0.95, mastery)
                 state.total_attempts = 10
                 state.correct_count = int(state.mastery_probability * 10)
-                state.last_graded_at = datetime.now(timezone.utc)
+                state.last_graded_at = datetime.now(UTC)
 
         heatmap = knowledge_tracker.calculate_class_heatmap(student_ids, kp_ids)
         self.assertEqual(len(heatmap), 5)

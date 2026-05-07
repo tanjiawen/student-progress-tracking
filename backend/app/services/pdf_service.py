@@ -4,8 +4,6 @@ PDF 处理服务
 """
 
 import io
-from pathlib import Path
-from typing import List, Tuple
 
 import fitz  # PyMuPDF
 from PIL import Image, ImageEnhance, ImageFilter
@@ -24,7 +22,7 @@ class PDFService:
         pdf_bytes: bytes,
         dpi: int = DEFAULT_DPI,
         enhance: bool = True,
-    ) -> List[Tuple[int, bytes, str]]:
+    ) -> list[tuple[int, bytes, str]]:
         """
         将 PDF 转换为图片列表
 
@@ -39,7 +37,7 @@ class PDFService:
         try:
             doc = fitz.open(stream=pdf_bytes, filetype="pdf")
         except Exception as e:
-            raise BadRequestException(f"无法解析 PDF: {e}")
+            raise BadRequestException(f"无法解析 PDF: {e}") from e
 
         images = []
         for page_num in range(len(doc)):
@@ -108,7 +106,7 @@ class PDFService:
             doc.close()
             return text
         except Exception as e:
-            raise BadRequestException(f"PDF 文本提取失败: {e}")
+            raise BadRequestException(f"PDF 文本提取失败: {e}") from e
 
     @staticmethod
     def get_pdf_info(pdf_bytes: bytes) -> dict:
@@ -123,12 +121,12 @@ class PDFService:
             doc.close()
             return info
         except Exception as e:
-            raise BadRequestException(f"无法读取 PDF 信息: {e}")
+            raise BadRequestException(f"无法读取 PDF 信息: {e}") from e
 
     @staticmethod
     def crop_answer_area(
         image_bytes: bytes,
-        bbox: Tuple[float, float, float, float],
+        bbox: tuple[float, float, float, float],
     ) -> bytes:
         """
         从图片中裁剪指定区域（作答区）

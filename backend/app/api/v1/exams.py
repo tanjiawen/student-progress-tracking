@@ -3,12 +3,12 @@
 核心功能：上传、OCR、题目解析、判卷
 """
 
-from typing import Any, List, Optional
+from typing import Any
 
 from fastapi import APIRouter, File, Form, UploadFile, status
 
 from app.core.exceptions import BadRequestException
-from app.services.grading_engine import GradingResult, grading_engine
+from app.services.grading_engine import grading_engine
 from app.services.knowledge_tracker import knowledge_tracker
 from app.services.layout_parser import ParsedQuestion, layout_parser
 from app.services.pdf_service import pdf_service
@@ -19,7 +19,7 @@ router = APIRouter()
 
 # 内存中的临时存储（实际应使用数据库）
 _exams: dict[int, dict] = {}
-_exam_questions: dict[int, List[ParsedQuestion]] = {}
+_exam_questions: dict[int, list[ParsedQuestion]] = {}
 _next_exam_id = 1
 
 
@@ -39,12 +39,12 @@ async def upload_exam(
     global _next_exam_id
 
     if not file.filename:
-        raise BadRequestException("未提供文件")
+        raise BadRequestException("未提供文件") from None
 
     # 读取文件内容
     contents = await file.read()
     if len(contents) == 0:
-        raise BadRequestException("文件为空")
+        raise BadRequestException("文件为空") from None
 
     # 判断文件类型
     content_type = file.content_type or ""
@@ -73,7 +73,6 @@ async def upload_exam(
 
     # 处理 PDF：转图片
     if is_pdf:
-        pdf_info = pdf_service.get_pdf_info(contents)
         images = pdf_service.pdf_to_images(contents, dpi=300, enhance=True)
 
         for page_num, img_bytes, fmt in images:
@@ -121,7 +120,7 @@ async def upload_exam(
 @router.post("/{exam_id}/ocr")
 async def ocr_exam(
     exam_id: int,
-    provider: Optional[str] = None,
+    provider: str | None = None,
 ) -> Any:
     """
     对试卷进行 OCR 识别和版面分析
@@ -132,13 +131,13 @@ async def ocr_exam(
 
     exam = _exams.get(exam_id)
     if not exam:
-        raise BadRequestException("考试不存在")
+        raise BadRequestException("考试不存在") from None
 
     if exam["status"] not in ("uploaded", "ocr_failed"):
         raise BadRequestException(f"当前状态 {exam['status']} 不支持 OCR")
 
     exam["status"] = "processing"
-    all_questions: List[ParsedQuestion] = []
+    all_questions: list[ParsedQuestion] = []
     ocr_warnings = []
 
     for page in exam["pages"]:
@@ -208,7 +207,7 @@ async def upload_answer_key(
     """上传标准答案（PDF 或文本文件）"""
     exam = _exams.get(exam_id)
     if not exam:
-        raise BadRequestException("考试不存在")
+        raise BadRequestException("考试不存在") from None
 
     contents = await file.read()
 
@@ -237,7 +236,7 @@ async def upload_answer_key(
 async def grade_exam(
     exam_id: int,
     student_id: int = Form(1),
-    answers: Optional[str] = Form(None),
+    answers: str | None = Form(None),
 ) -> Any:
     """
     对考试进行判卷
@@ -249,15 +248,15 @@ async def grade_exam(
 
     exam = _exams.get(exam_id)
     if not exam:
-        raise BadRequestException("考试不存在")
+        raise BadRequestException("考试不存在") from None
 
     questions = _exam_questions.get(exam_id, [])
     if not questions:
-        raise BadRequestException("请先完成 OCR 识别")
+        raise BadRequestException("请先完成 OCR 识别") from None
 
     answer_key = exam.get("answer_key", {})
     if not answer_key:
-        raise BadRequestException("请先上传标准答案")
+        raise BadRequestException("请先上传标准答案") from None
 
     # 解析学生答案
     student_answers = {}
@@ -343,7 +342,7 @@ async def get_exam(exam_id: int) -> Any:
     """获取考试详情"""
     exam = _exams.get(exam_id)
     if not exam:
-        raise BadRequestException("考试不存在")
+        raise BadRequestException("考试不存在") from None
     return exam
 
 
@@ -352,7 +351,7 @@ async def get_exam_questions(exam_id: int) -> Any:
     """获取考试题目列表"""
     exam = _exams.get(exam_id)
     if not exam:
-        raise BadRequestException("考试不存在")
+        raise BadRequestException("考试不存在") from None
     return {
         "exam_id": exam_id,
         "questions": exam.get("questions", []),

@@ -5,7 +5,6 @@
 
 import io
 from datetime import timedelta
-from typing import Optional
 from uuid import uuid4
 
 from minio import Minio
@@ -73,7 +72,7 @@ class StorageService:
                 content_type=content_type,
             )
         except S3Error as e:
-            raise BadRequestException(f"文件上传失败: {e}")
+            raise BadRequestException(f"文件上传失败: {e}") from e
 
         return object_name
 
@@ -140,14 +139,14 @@ class StorageService:
             response = self.client.get_object(self.bucket_name, object_name)
             return response.read()
         except S3Error as e:
-            raise BadRequestException(f"文件读取失败: {e}")
+            raise BadRequestException(f"文件读取失败: {e}") from e
 
     def delete_file(self, object_name: str) -> None:
         """删除文件"""
-        try:
+        import contextlib
+
+        with contextlib.suppress(S3Error):
             self.client.remove_object(self.bucket_name, object_name)
-        except S3Error:
-            pass
 
 
 # 全局实例

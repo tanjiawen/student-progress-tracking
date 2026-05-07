@@ -1,11 +1,14 @@
 # DeepSeek Gateway 配置
-api_key = "sk-864d13feccf24173ade545c99934872b"
+# 请通过环境变量 DEEPSEEK_API_KEY 传入 API Key
+# 或手动修改此文件后注意保密
+
+api_key = "${DEEPSEEK_API_KEY}"
 base_url = "https://api.deepseek.com"
 default_text_model = "deepseek-chat"
 provider = "deepseek"
 
 [providers.deepseek]
-api_key = "sk-864d13feccf24173ade545c99934872b"
+api_key = "${DEEPSEEK_API_KEY}"
 base_url = "https://api.deepseek.com"
 model = "deepseek-chat"
 

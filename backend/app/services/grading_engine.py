@@ -5,12 +5,11 @@
 
 import json
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from app.ai.openai_vision import OpenAIVisionClient
 from app.ai.qwen_vl import QwenVLClient
 from app.core.config import settings
-from app.core.exceptions import BadRequestException
 
 
 class GradingResult:
@@ -21,13 +20,13 @@ class GradingResult:
         is_correct: bool = False,
         score: float = 0.0,
         max_score: float = 0.0,
-        error_type: Optional[str] = None,
+        error_type: str | None = None,
         error_type_detail: str = "",
-        knowledge_point_ids: Optional[List[int]] = None,
+        knowledge_point_ids: list[int] | None = None,
         suggestion: str = "",
         confidence: float = 0.0,
         ai_model: str = "",
-        raw_response: Optional[Dict] = None,
+        raw_response: dict | None = None,
     ):
         self.is_correct = is_correct
         self.score = score
@@ -40,7 +39,7 @@ class GradingResult:
         self.ai_model = ai_model
         self.raw_response = raw_response or {}
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "is_correct": self.is_correct,
             "score": self.score,
@@ -90,7 +89,7 @@ class GradingEngine:
         standard_answer: str,
         student_answer: str,
         max_score: float = 0.0,
-        knowledge_point_hints: Optional[List[str]] = None,
+        knowledge_point_hints: list[str] | None = None,
         use_llm_for_objective: bool = False,
     ) -> GradingResult:
         """
@@ -182,7 +181,7 @@ class GradingEngine:
         standard_answer: str,
         student_answer: str,
         max_score: float,
-        knowledge_point_hints: Optional[List[str]] = None,
+        knowledge_point_hints: list[str] | None = None,
     ) -> GradingResult:
         """主观题 LLM 智能判分"""
         if not student_answer or not student_answer.strip():
@@ -242,7 +241,7 @@ class GradingEngine:
         standard_answer: str,
         answer_image_bytes: bytes,
         max_score: float = 0.0,
-        knowledge_point_hints: Optional[List[str]] = None,
+        knowledge_point_hints: list[str] | None = None,
     ) -> GradingResult:
         """
         基于图片的手写作答判卷（多模态）
@@ -280,7 +279,7 @@ class GradingEngine:
         standard_answer: str,
         student_answer: str,
         max_score: float,
-        knowledge_point_hints: Optional[List[str]] = None,
+        knowledge_point_hints: list[str] | None = None,
     ) -> str:
         """构建判卷 Prompt"""
         kp_hint = ""
@@ -356,7 +355,7 @@ class GradingEngine:
             return data["choices"][0]["message"]["content"]
 
     @staticmethod
-    def _parse_grading_response(text: str) -> Dict[str, Any]:
+    def _parse_grading_response(text: str) -> dict[str, Any]:
         """解析 LLM 判卷输出"""
         text = text.strip()
         if text.startswith("```json"):

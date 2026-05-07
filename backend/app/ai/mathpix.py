@@ -4,8 +4,7 @@ Mathpix API 客户端 - 公式识别（LaTeX 转换）
 """
 
 import base64
-import json
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import httpx
 
@@ -23,7 +22,7 @@ class MathpixClient:
         self.api_key = settings.MATHPIX_API_KEY or ""
         self.timeout = 30.0
 
-    def _get_headers(self) -> Dict[str, str]:
+    def _get_headers(self) -> dict[str, str]:
         return {
             "app_id": self.app_id,
             "app_key": self.api_key,
@@ -35,7 +34,7 @@ class MathpixClient:
         image_bytes: bytes,
         include_latex: bool = True,
         include_text: bool = True,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         识别图片中的公式和文本
 
@@ -49,7 +48,7 @@ class MathpixClient:
             }
         """
         if not self.app_id or not self.api_key:
-            raise BadRequestException("Mathpix API 密钥未配置")
+            raise BadRequestException("Mathpix API 密钥未配置") from None
 
         b64_image = base64.b64encode(image_bytes).decode("utf-8")
 
@@ -81,8 +80,8 @@ class MathpixClient:
 
     async def batch_recognize(
         self,
-        image_bytes_list: List[bytes],
-    ) -> List[Dict[str, Any]]:
+        image_bytes_list: list[bytes],
+    ) -> list[dict[str, Any]]:
         """批量识别"""
         results = []
         for img_bytes in image_bytes_list:

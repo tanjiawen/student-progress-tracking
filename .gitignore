@@ -75,3 +75,11 @@ data/processed/
 
 # DeepSeek Gateway Source (compiled locally, not committed)
 services/deepseek-gateway/
+
+# Runtime databases
+*.db
+*.sqlite
+*.sqlite3
+
+# DeepSeek Gateway runtime
+services/deepseek-gateway-config/state.db

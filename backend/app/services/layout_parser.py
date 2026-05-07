@@ -5,7 +5,7 @@
 """
 
 import re
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from app.core.exceptions import BadRequestException
 
@@ -19,10 +19,10 @@ class ParsedQuestion:
         question_type: str = "unknown",
         content: str = "",
         content_latex: str = "",
-        options: Optional[Dict[str, str]] = None,
+        options: dict[str, str] | None = None,
         score: float = 0.0,
-        bbox: Optional[Dict[str, float]] = None,
-        answer_area: Optional[Dict[str, float]] = None,
+        bbox: dict[str, float] | None = None,
+        answer_area: dict[str, float] | None = None,
         page_number: int = 1,
         ocr_confidence: float = 0.0,
     ):
@@ -37,7 +37,7 @@ class ParsedQuestion:
         self.page_number = page_number
         self.ocr_confidence = ocr_confidence
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "sequence": self.sequence,
             "type": self.question_type,
@@ -70,9 +70,9 @@ class LayoutParser:
 
     @staticmethod
     def parse_ocr_result(
-        ocr_data: Dict[str, Any],
+        ocr_data: dict[str, Any],
         page_number: int = 1,
-    ) -> List[ParsedQuestion]:
+    ) -> list[ParsedQuestion]:
         """
         将 OCR 引擎输出的 JSON 解析为标准题目列表
 
@@ -108,7 +108,7 @@ class LayoutParser:
 
     @staticmethod
     def _parse_single_question(
-        q: Dict[str, Any],
+        q: dict[str, Any],
         page_number: int,
     ) -> ParsedQuestion:
         """解析单道题目"""
@@ -177,7 +177,7 @@ class LayoutParser:
         )
 
     @staticmethod
-    def _extract_options(text: str) -> Dict[str, str]:
+    def _extract_options(text: str) -> dict[str, str]:
         """从文本中提取选择题选项"""
         options = {}
 
@@ -200,8 +200,8 @@ class LayoutParser:
 
     @staticmethod
     def merge_multi_page_questions(
-        all_pages: List[List[ParsedQuestion]],
-    ) -> List[ParsedQuestion]:
+        all_pages: list[list[ParsedQuestion]],
+    ) -> list[ParsedQuestion]:
         """
         合并多页解析结果，重新排序题号
         """
@@ -222,7 +222,7 @@ class LayoutParser:
         return merged
 
     @staticmethod
-    def extract_answer_key_from_text(text: str) -> Dict[int, str]:
+    def extract_answer_key_from_text(text: str) -> dict[int, str]:
         """
         从标准答案文本中提取答案映射
         支持格式：
@@ -242,7 +242,7 @@ class LayoutParser:
         return answers
 
     @staticmethod
-    def validate_questions(questions: List[ParsedQuestion]) -> Tuple[List[ParsedQuestion], List[Dict]]:
+    def validate_questions(questions: list[ParsedQuestion]) -> tuple[list[ParsedQuestion], list[dict]]:
         """
         验证题目质量，返回有效题目和警告列表
         """

@@ -8,18 +8,18 @@ import asyncio
 import json
 import random
 import time
+from collections.abc import AsyncGenerator, Callable
 from dataclasses import dataclass, field
-from enum import Enum
-from typing import Any, AsyncGenerator, Callable, Dict, List, Optional, Union
+from enum import StrEnum
+from typing import Any
 
 import httpx
-from pydantic import BaseModel, Field
 
 from app.core.config import settings
 from app.core.exceptions import BadRequestException
 
 
-class ProviderType(str, Enum):
+class ProviderType(StrEnum):
     """支持的 LLM Provider"""
     DEEPSEEK = "deepseek"
     OPENAI = "openai"
@@ -28,7 +28,7 @@ class ProviderType(str, Enum):
     FIREWORKS = "fireworks"
 
 
-class ConnectionHealth(str, Enum):
+class ConnectionHealth(StrEnum):
     """连接健康状态"""
     HEALTHY = "healthy"
     DEGRADED = "degraded"
@@ -57,34 +57,34 @@ class LLMMessage:
     """LLM 消息"""
     role: str  # system / user / assistant / tool
     content: str = ""
-    tool_calls: Optional[List[Dict]] = None
-    tool_call_id: Optional[str] = None
-    reasoning_content: Optional[str] = None
-    name: Optional[str] = None
+    tool_calls: list[dict] | None = None
+    tool_call_id: str | None = None
+    reasoning_content: str | None = None
+    name: str | None = None
 
 
 @dataclass
 class LLMRequest:
     """LLM 请求"""
-    messages: List[LLMMessage]
-    model: Optional[str] = None
+    messages: list[LLMMessage]
+    model: str | None = None
     temperature: float = 0.3
     max_tokens: int = 4096
     stream: bool = False
-    tools: Optional[List[Dict]] = None
-    response_format: Optional[Dict] = None
-    reasoning_effort: Optional[str] = None  # off / low / medium / high
+    tools: list[dict] | None = None
+    response_format: dict | None = None
+    reasoning_effort: str | None = None  # off / low / medium / high
 
 
 @dataclass
 class LLMResponse:
     """LLM 响应"""
     content: str
-    reasoning_content: Optional[str] = None
-    tool_calls: Optional[List[Dict]] = None
+    reasoning_content: str | None = None
+    tool_calls: list[dict] | None = None
     model: str = ""
     provider: str = ""
-    usage: Dict[str, int] = field(default_factory=dict)
+    usage: dict[str, int] = field(default_factory=dict)
     latency_ms: int = 0
     finish_reason: str = ""
 
@@ -94,7 +94,7 @@ class StreamEvent:
     """流式事件"""
     event_type: str  # content / reasoning / tool_call / done / error
     data: str = ""
-    tool_call_chunk: Optional[Dict] = None
+    tool_call_chunk: dict | None = None
 
 
 class TokenBucket:
@@ -133,7 +133,7 @@ class LLMProvider:
         api_key: str,
         base_url: str,
         default_model: str,
-        retry_config: Optional[RetryConfig] = None,
+        retry_config: RetryConfig | None = None,
     ):
         self.provider_type = provider_type
         self.api_key = api_key
@@ -142,12 +142,12 @@ class LLMProvider:
         self.retry_config = retry_config or RetryConfig()
         self.health = ConnectionHealth.HEALTHY
         self.consecutive_failures = 0
-        self.last_failure_time: Optional[float] = None
+        self.last_failure_time: float | None = None
         self.rate_limiter = TokenBucket(
             rate=RateLimitConfig().requests_per_second,
             burst=RateLimitConfig().burst_size,
         )
-        self._client: Optional[httpx.AsyncClient] = None
+        self._client: httpx.AsyncClient | None = None
 
     @property
     def client(self) -> httpx.AsyncClient:
@@ -163,17 +163,17 @@ class LLMProvider:
             await self._client.aclose()
             self._client = None
 
-    def _get_headers(self) -> Dict[str, str]:
+    def _get_headers(self) -> dict[str, str]:
         return {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
         }
 
-    def _build_request_payload(self, request: LLMRequest) -> Dict[str, Any]:
+    def _build_request_payload(self, request: LLMRequest) -> dict[str, Any]:
         """构建请求体"""
         messages = []
         for msg in request.messages:
-            m: Dict[str, Any] = {"role": msg.role, "content": msg.content}
+            m: dict[str, Any] = {"role": msg.role, "content": msg.content}
             if msg.reasoning_content and msg.role == "assistant":
                 m["reasoning_content"] = msg.reasoning_content
             if msg.tool_calls and msg.role == "assistant":
@@ -183,7 +183,7 @@ class LLMProvider:
                 m["name"] = msg.name or "tool"
             messages.append(m)
 
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "model": request.model or self.default_model,
             "messages": messages,
             "temperature": request.temperature,
@@ -198,13 +198,16 @@ class LLMProvider:
             payload["response_format"] = request.response_format
 
         # DeepSeek reasoning
-        if self.provider_type == ProviderType.DEEPSEEK and request.reasoning_effort:
-            if request.reasoning_effort in ("high", "max"):
-                payload["model"] = "deepseek-reasoner"
+        if (
+            self.provider_type == ProviderType.DEEPSEEK
+            and request.reasoning_effort
+            and request.reasoning_effort in ("high", "max")
+        ):
+            payload["model"] = "deepseek-reasoner"
 
         return payload
 
-    async def _do_request(self, payload: Dict[str, Any]) -> httpx.Response:
+    async def _do_request(self, payload: dict[str, Any]) -> httpx.Response:
         """执行原始 HTTP 请求"""
         await self.rate_limiter.wait()
         return await self.client.post(
@@ -243,7 +246,7 @@ class LLMProvider:
                     continue
 
                 # 4xx 客户端错误不重试
-                raise BadRequestException(f"LLM API 错误 {status}: {e.response.text}")
+                raise BadRequestException(f"LLM API 错误 {status}: {e.response.text}") from e
 
             except (httpx.ConnectError, httpx.TimeoutException, httpx.NetworkError) as e:
                 last_exception = e
@@ -257,7 +260,7 @@ class LLMProvider:
                 continue
 
             except Exception as e:
-                raise BadRequestException(f"LLM 请求异常: {str(e)}")
+                raise BadRequestException(f"LLM 请求异常: {str(e)}") from e
 
         # 全部重试失败
         self.health = ConnectionHealth.UNHEALTHY
@@ -389,8 +392,8 @@ class LLMGateway:
     """
 
     def __init__(self):
-        self.providers: Dict[str, LLMProvider] = {}
-        self.provider_order: List[str] = []
+        self.providers: dict[str, LLMProvider] = {}
+        self.provider_order: list[str] = []
         self._init_providers()
 
     def _init_providers(self) -> None:
@@ -447,7 +450,7 @@ class LLMGateway:
     async def chat(
         self,
         request: LLMRequest,
-        preferred_provider: Optional[str] = None,
+        preferred_provider: str | None = None,
     ) -> LLMResponse:
         """
         统一对话接口，自动 Provider 选择和降级
@@ -461,10 +464,12 @@ class LLMGateway:
                 continue
 
             # 跳过不健康且最近失败的 Provider
-            if provider.health == ConnectionHealth.UNHEALTHY:
-                if provider.last_failure_time and \
-                   time.monotonic() - provider.last_failure_time < 15:
-                    continue
+            if (
+                provider.health == ConnectionHealth.UNHEALTHY
+                and provider.last_failure_time
+                and time.monotonic() - provider.last_failure_time < 15
+            ):
+                continue
 
             try:
                 print(f"🤖 使用 Provider: {name} ({provider.default_model})")
@@ -484,7 +489,7 @@ class LLMGateway:
     async def chat_stream(
         self,
         request: LLMRequest,
-        preferred_provider: Optional[str] = None,
+        preferred_provider: str | None = None,
     ) -> AsyncGenerator[StreamEvent, None]:
         """统一流式对话接口"""
         order = self._get_provider_order(preferred_provider)
@@ -511,7 +516,7 @@ class LLMGateway:
         request: LLMRequest,
         tool_executor: Callable,
         max_tool_rounds: int = 5,
-        preferred_provider: Optional[str] = None,
+        preferred_provider: str | None = None,
     ) -> LLMResponse:
         """
         支持工具调用的对话（ReAct 循环）
@@ -523,7 +528,7 @@ class LLMGateway:
         """
         messages = list(request.messages)
 
-        for round_num in range(max_tool_rounds):
+        for _round_num in range(max_tool_rounds):
             req = LLMRequest(
                 messages=messages,
                 model=request.model,
@@ -568,7 +573,7 @@ class LLMGateway:
         # 达到最大轮数，返回最后一次结果
         return response
 
-    def _get_provider_order(self, preferred: Optional[str] = None) -> List[str]:
+    def _get_provider_order(self, preferred: str | None = None) -> list[str]:
         """确定 Provider 尝试顺序"""
         order = []
         if preferred and preferred in self.provider_order:
@@ -578,7 +583,7 @@ class LLMGateway:
                 order.append(name)
         return order if order else list(self.providers.keys())
 
-    async def health_check_all(self) -> Dict[str, bool]:
+    async def health_check_all(self) -> dict[str, bool]:
         """检查所有 Provider 健康状态"""
         results = {}
         for name, provider in self.providers.items():

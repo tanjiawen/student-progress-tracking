@@ -5,7 +5,7 @@ OpenAI GPT-4V / GPT-4o 多模态客户端
 
 import base64
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import httpx
 
@@ -29,10 +29,10 @@ class OpenAIVisionClient:
         self,
         image_bytes: bytes,
         text_prompt: str,
-        model: Optional[str] = None,
+        model: str | None = None,
         temperature: float = 0.3,
         max_tokens: int = 4096,
-        response_format: Optional[Dict] = None,
+        response_format: dict | None = None,
     ) -> str:
         """多模态对话"""
         headers = {
@@ -58,7 +58,7 @@ class OpenAIVisionClient:
             }
         ]
 
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "model": model or self.model,
             "messages": messages,
             "temperature": temperature,
@@ -81,7 +81,7 @@ class OpenAIVisionClient:
         self,
         image_bytes: bytes,
         subject_hint: str = "数学",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """识别试卷页面"""
         prompt = f"""你是一位专业的试卷版面分析专家。请仔细分析这张{subject_hint}试卷图片，提取所有题目信息。
 
@@ -120,7 +120,7 @@ bbox 和 answer_area 使用相对坐标 (0-1)
             return parsed
 
         except Exception as e:
-            raise BadRequestException(f"GPT-4V 识别失败: {e}")
+            raise BadRequestException(f"GPT-4V 识别失败: {e}") from e
 
     async def recognize_student_answer(
         self,

@@ -3,7 +3,7 @@ AI 客户端基类与统一接口
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 class OCRResult:
@@ -14,8 +14,8 @@ class OCRResult:
         text: str = "",
         latex: str = "",
         confidence: float = 0.0,
-        bbox: Optional[Dict[str, float]] = None,
-        raw_response: Optional[Dict] = None,
+        bbox: dict[str, float] | None = None,
+        raw_response: dict | None = None,
     ):
         self.text = text
         self.latex = latex
@@ -31,7 +31,7 @@ class BaseOCRClient(ABC):
     async def recognize(
         self,
         image_bytes: bytes,
-        prompt: Optional[str] = None,
+        prompt: str | None = None,
     ) -> OCRResult:
         """识别单张图片"""
         pass
@@ -39,9 +39,9 @@ class BaseOCRClient(ABC):
     @abstractmethod
     async def batch_recognize(
         self,
-        image_bytes_list: List[bytes],
-        prompt: Optional[str] = None,
-    ) -> List[OCRResult]:
+        image_bytes_list: list[bytes],
+        prompt: str | None = None,
+    ) -> list[OCRResult]:
         """批量识别"""
         pass
 
@@ -52,11 +52,11 @@ class BaseLLMClient(ABC):
     @abstractmethod
     async def chat(
         self,
-        messages: List[Dict[str, Any]],
-        model: Optional[str] = None,
+        messages: list[dict[str, Any]],
+        model: str | None = None,
         temperature: float = 0.3,
         max_tokens: int = 4096,
-        response_format: Optional[Dict] = None,
+        response_format: dict | None = None,
     ) -> str:
         """对话请求"""
         pass
@@ -66,7 +66,7 @@ class BaseLLMClient(ABC):
         self,
         image_bytes: bytes,
         text_prompt: str,
-        model: Optional[str] = None,
+        model: str | None = None,
         temperature: float = 0.3,
         max_tokens: int = 4096,
     ) -> str:

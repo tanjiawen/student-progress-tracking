@@ -3,11 +3,10 @@
 核心功能：知识状态查询、薄弱点分析、雷达图、趋势
 """
 
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import APIRouter, Query
 
-from app.core.exceptions import BadRequestException
 from app.services.knowledge_tracker import knowledge_tracker
 
 router = APIRouter()
@@ -16,8 +15,8 @@ router = APIRouter()
 @router.get("/{student_id}/knowledge-states")
 async def get_knowledge_states(
     student_id: int,
-    subject_id: Optional[int] = Query(None),
-    status: Optional[str] = Query(None),
+    subject_id: int | None = Query(None),
+    status: str | None = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
 ) -> Any:

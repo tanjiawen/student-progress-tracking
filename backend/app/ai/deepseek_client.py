@@ -3,13 +3,10 @@ DeepSeek Gateway Python 客户端
 封装对 deepseek-app-server HTTP 服务的调用
 """
 
-import json
-from typing import Any, AsyncGenerator, Dict, List, Optional
+from collections.abc import AsyncGenerator
+from typing import Any
 
 import httpx
-
-from app.core.config import settings
-from app.core.exceptions import BadRequestException
 
 
 class DeepSeekGatewayClient:
@@ -25,7 +22,7 @@ class DeepSeekGatewayClient:
             headers={"Content-Type": "application/json"},
         )
 
-    async def health_check(self) -> Dict[str, Any]:
+    async def health_check(self) -> dict[str, Any]:
         """健康检查"""
         response = await self.client.get(f"{self.base_url}/healthz")
         response.raise_for_status()
@@ -33,12 +30,12 @@ class DeepSeekGatewayClient:
 
     async def chat(
         self,
-        messages: List[Dict[str, str]],
-        model: Optional[str] = None,
+        messages: list[dict[str, str]],
+        model: str | None = None,
         temperature: float = 0.3,
         max_tokens: int = 4096,
         stream: bool = False,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         对话接口（通过 prompt 端点）
 
@@ -74,8 +71,8 @@ class DeepSeekGatewayClient:
 
     async def chat_stream(
         self,
-        messages: List[Dict[str, str]],
-        model: Optional[str] = None,
+        messages: list[dict[str, str]],
+        model: str | None = None,
         temperature: float = 0.3,
         max_tokens: int = 4096,
     ) -> AsyncGenerator[str, None]:
@@ -92,9 +89,9 @@ class DeepSeekGatewayClient:
     async def execute_tool(
         self,
         tool_name: str,
-        tool_args: Dict[str, Any],
-        cwd: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        tool_args: dict[str, Any],
+        cwd: str | None = None,
+    ) -> dict[str, Any]:
         """
         执行工具
 
@@ -126,7 +123,7 @@ class DeepSeekGatewayClient:
         self,
         query: str,
         max_results: int = 10,
-    ) -> List[Dict[str, str]]:
+    ) -> list[dict[str, str]]:
         """
         联网搜索（通过工具执行）
         """
@@ -161,7 +158,7 @@ class DeepSeekGatewayClient:
             return result.get("content", "") or result.get("text", "")
         return ""
 
-    async def get_models(self) -> List[Dict[str, Any]]:
+    async def get_models(self) -> list[dict[str, Any]]:
         """获取可用模型列表"""
         response = await self.client.post(
             f"{self.base_url}/app",

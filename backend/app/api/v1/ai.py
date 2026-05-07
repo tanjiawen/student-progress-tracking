@@ -3,9 +3,9 @@ AI 服务 API 路由
 通过 DeepSeek Gateway (Rust) 提供 LLM 对话、联网搜索、工具执行
 """
 
-from typing import Any, List, Optional
+from typing import Any
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
 from app.ai.deepseek_client import deepseek_gateway
@@ -15,8 +15,8 @@ router = APIRouter()
 
 
 class ChatRequest(BaseModel):
-    messages: List[dict] = Field(..., description="对话消息列表")
-    model: Optional[str] = Field(None, description="模型名称")
+    messages: list[dict] = Field(..., description="对话消息列表")
+    model: str | None = Field(None, description="模型名称")
     temperature: float = Field(0.3, ge=0.0, le=2.0)
     max_tokens: int = Field(4096, ge=1, le=8192)
     stream: bool = Field(False, description="是否流式输出")
@@ -25,7 +25,7 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     output: str
     model: str = ""
-    events: List[dict] = []
+    events: list[dict] = []
 
 
 class SearchRequest(BaseModel):
@@ -62,10 +62,10 @@ async def chat(request: ChatRequest) -> Any:
             events=result.get("events", []),
         )
     except Exception as e:
-        raise BadRequestException(f"LLM 对话失败: {str(e)}")
+        raise BadRequestException(f"LLM 对话失败: {str(e)}") from e
 
 
-@router.post("/search", response_model=List[SearchResultItem])
+@router.post("/search", response_model=list[SearchResultItem])
 async def web_search(request: SearchRequest) -> Any:
     """联网搜索"""
     try:
@@ -75,7 +75,7 @@ async def web_search(request: SearchRequest) -> Any:
         )
         return [SearchResultItem(**r) for r in results]
     except Exception as e:
-        raise BadRequestException(f"搜索失败: {str(e)}")
+        raise BadRequestException(f"搜索失败: {str(e)}") from e
 
 
 @router.post("/fetch-url")
@@ -85,7 +85,7 @@ async def fetch_url(url: str, format: str = "text") -> Any:
         content = await deepseek_gateway.fetch_url(url, format)
         return {"url": url, "content": content, "format": format}
     except Exception as e:
-        raise BadRequestException(f"获取网页失败: {str(e)}")
+        raise BadRequestException(f"获取网页失败: {str(e)}") from e
 
 
 @router.post("/tool")
@@ -98,7 +98,7 @@ async def execute_tool(request: ToolExecuteRequest) -> Any:
         )
         return result
     except Exception as e:
-        raise BadRequestException(f"工具执行失败: {str(e)}")
+        raise BadRequestException(f"工具执行失败: {str(e)}") from e
 
 
 @router.get("/models")
@@ -108,7 +108,7 @@ async def list_models() -> Any:
         models = await deepseek_gateway.get_models()
         return {"models": models}
     except Exception as e:
-        raise BadRequestException(f"获取模型列表失败: {str(e)}")
+        raise BadRequestException(f"获取模型列表失败: {str(e)}") from e
 
 
 @router.get("/health")

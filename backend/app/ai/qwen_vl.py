@@ -5,11 +5,11 @@ Qwen-VL 多模态 OCR 客户端
 
 import base64
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import httpx
 
-from app.ai.base import BaseLLMClient, OCRResult
+from app.ai.base import BaseLLMClient
 from app.core.config import settings
 from app.core.exceptions import BadRequestException
 
@@ -29,11 +29,11 @@ class QwenVLClient(BaseLLMClient):
 
     async def chat(
         self,
-        messages: List[Dict[str, Any]],
-        model: Optional[str] = None,
+        messages: list[dict[str, Any]],
+        model: str | None = None,
         temperature: float = 0.3,
         max_tokens: int = 4096,
-        response_format: Optional[Dict] = None,
+        response_format: dict | None = None,
     ) -> str:
         """纯文本对话"""
         headers = {
@@ -64,7 +64,7 @@ class QwenVLClient(BaseLLMClient):
         self,
         image_bytes: bytes,
         text_prompt: str,
-        model: Optional[str] = None,
+        model: str | None = None,
         temperature: float = 0.3,
         max_tokens: int = 4096,
     ) -> str:
@@ -107,7 +107,7 @@ class QwenVLClient(BaseLLMClient):
         self,
         image_bytes: bytes,
         subject_hint: str = "数学",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         识别试卷页面，输出结构化版面分析结果
 
@@ -167,7 +167,7 @@ bbox 和 answer_area 使用相对坐标 (0-1)
             return parsed
 
         except Exception as e:
-            raise BadRequestException(f"Qwen-VL 识别失败: {e}")
+            raise BadRequestException(f"Qwen-VL 识别失败: {e}") from e
 
     async def recognize_student_answer(
         self,

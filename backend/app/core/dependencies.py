@@ -1,10 +1,10 @@
-from typing import AsyncGenerator, Optional
+from collections.abc import AsyncGenerator
 
-from fastapi import Depends, Header, Request
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from sqlmodel.ext.asyncio.session import AsyncSession
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncEngine
+from fastapi import Depends
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from sqlalchemy.orm import sessionmaker
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.core.config import settings
 from app.core.exceptions import UnauthorizedException
@@ -12,7 +12,7 @@ from app.core.security import decode_token
 
 security = HTTPBearer(auto_error=False)
 
-_engine: Optional[AsyncEngine] = None
+_engine: AsyncEngine | None = None
 
 
 def get_engine() -> AsyncEngine:
@@ -34,7 +34,7 @@ async def get_session() -> AsyncGenerator[AsyncSession, None]:
 
 
 async def get_current_user(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
 ) -> dict:
     if not credentials:
         raise UnauthorizedException("Missing authentication token")

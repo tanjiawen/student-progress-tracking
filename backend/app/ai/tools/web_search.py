@@ -8,7 +8,6 @@ import html
 import re
 import urllib.parse
 from dataclasses import dataclass
-from typing import List, Optional
 
 import httpx
 
@@ -52,8 +51,8 @@ class WebSearchTool:
         self,
         query: str,
         max_results: int = 10,
-        source: Optional[str] = None,
-    ) -> List[SearchResult]:
+        source: str | None = None,
+    ) -> list[SearchResult]:
         """执行搜索"""
         if not query or not query.strip():
             raise BadRequestException("搜索关键词不能为空")
@@ -79,7 +78,7 @@ class WebSearchTool:
 
         raise BadRequestException(f"搜索全部失败: {last_error}")
 
-    async def _search_duckduckgo(self, query: str, max_results: int) -> List[SearchResult]:
+    async def _search_duckduckgo(self, query: str, max_results: int) -> list[SearchResult]:
         params = {"q": query, "kl": "zh-cn"}
         response = await self.client.post(self.DUCKDUCKGO_URL, data=params)
         response.raise_for_status()
@@ -117,7 +116,7 @@ class WebSearchTool:
 
         return results
 
-    async def _search_bing(self, query: str, max_results: int) -> List[SearchResult]:
+    async def _search_bing(self, query: str, max_results: int) -> list[SearchResult]:
         params = {"q": query, "setmkt": "zh-CN", "setlang": "zh-hans"}
         response = await self.client.get(self.BING_URL, params=params)
         response.raise_for_status()
