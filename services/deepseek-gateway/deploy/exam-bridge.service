@@ -1,0 +1,32 @@
+[Unit]
+Description=DeepSeek Exam Bridge — exam processing adapter
+Documentation=https://github.com/Hmbown/DeepSeek-TUI
+After=network-online.target deepseek-api.service
+Wants=network-online.target deepseek-api.service
+
+[Service]
+Type=simple
+
+# EDIT: set your Linux username
+User=tanjiawen
+Group=tanjiawen
+
+# EDIT: path to exam-bridge.py
+ExecStart=/usr/bin/env python3 /home/tanjiawen/DeepSeek-TUI/deploy/exam-bridge.py
+
+Environment="DEEPSEEK_API_BASE=http://127.0.0.1:7878"
+Environment="BRIDGE_HOST=127.0.0.1"
+Environment="BRIDGE_PORT=8888"
+# EDIT: change to a strong secret
+Environment="BRIDGE_API_KEY=bridge-secret-change-me"
+
+Restart=on-failure
+RestartSec=5
+
+# Logging
+StandardOutput=append:/usr/local/var/log/exam-bridge.log
+StandardError=append:/usr/local/var/log/exam-bridge.err
+SyslogIdentifier=exam-bridge
+
+[Install]
+WantedBy=multi-user.target

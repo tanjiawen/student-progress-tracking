@@ -1,0 +1,67 @@
+# Caddy reverse proxy + TLS + basic auth for DeepSeek TUI Runtime API
+# Requires: Caddy (https://caddyserver.com)
+# Usage:  caddy run --config deploy/deepseek-api.caddy
+#         or copy to /etc/caddy/Caddyfile and `systemctl reload caddy`
+
+# ---------------------------------------------------------------------------
+# EDIT these three values before using:
+# ---------------------------------------------------------------------------
+
+# (1) Your domain — must have a DNS A/AAAA record pointing to this server.
+#     Remove the :443 suffix if you want Caddy to handle HTTPS automatically.
+set $DOMAIN deepseek-api.example.com
+
+# (2) HTTP basic auth — generate with:  caddy hash-password
+#     Username + bcrypt hash pair.
+set $AUTH_HASH '$2a$14$xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
+
+# (3) Backend — where deepseek serve --http is listening.
+set $BACKEND 127.0.0.1:7878
+
+# ---------------------------------------------------------------------------
+# Server block
+# ---------------------------------------------------------------------------
+
+{$DOMAIN} {
+    # -- TLS: Caddy auto-provisions Let's Encrypt certificates --
+    # Remove or comment out the `tls internal` line to use real certificates.
+
+    # -- Access control --
+    basicauth {
+        admin {$AUTH_HASH}
+    }
+
+    # -- Reverse proxy to DeepSeek Runtime API --
+    reverse_proxy {$BACKEND}
+
+    # -- Logs --
+    log {
+        output file /var/log/caddy/deepseek-api.log
+        format json
+    }
+
+    # -- Headers for SSE streaming --
+    header {
+        # Disable buffering so SSE events arrive in real time
+        -Server
+        X-Content-Type-Options nosniff
+    }
+
+    # -- Timeouts: increase for long-running agent turns --
+    # A turn may stream for minutes; don't let the proxy cut it off.
+    reverse_proxy {$BACKEND} {
+        flush_interval -1
+        transport http {
+            read_timeout 10m
+            write_timeout 10m
+        }
+    }
+}
+
+# ---------------------------------------------------------------------------
+# Optional: HTTPS redirect for the plain-HTTP domain
+# ---------------------------------------------------------------------------
+
+# http://{$DOMAIN} {
+#     redir https://{$DOMAIN}{uri} permanent
+# }

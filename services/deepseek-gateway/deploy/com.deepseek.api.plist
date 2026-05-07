@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.deepseek.api</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <!-- EDIT: path to the deepseek binary -->
+        <string>/Users/tanjiawen/.cargo/bin/deepseek</string>
+        <string>serve</string>
+        <string>--http</string>
+        <string>--host</string>
+        <string>127.0.0.1</string>
+        <string>--port</string>
+        <string>7878</string>
+        <string>--workers</string>
+        <string>4</string>
+    </array>
+
+    <!-- API key: launchd reads this from the user's shell environment.
+         If your key lives in ~/.deepseek/config.toml, it's picked up automatically.
+         To pass it explicitly, uncomment and fill in below:
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>DEEPSEEK_API_KEY</key>
+        <string>sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx</string>
+    </dict>
+    -->
+
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>ThrottleInterval</key>
+    <integer>5</integer>
+
+    <key>StandardOutPath</key>
+    <string>/usr/local/var/log/deepseek-api.log</string>
+    <key>StandardErrorPath</key>
+    <string>/usr/local/var/log/deepseek-api.err</string>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/tanjiawen</string>
+
+    <key>ProcessType</key>
+    <string>Background</string>
+</dict>
+</plist>

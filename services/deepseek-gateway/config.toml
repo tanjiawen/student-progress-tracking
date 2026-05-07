@@ -1,0 +1,28 @@
+# DeepSeek Gateway 配置
+# 请将 api_key 替换为你的真实 API Key
+
+api_key = "${DEEPSEEK_API_KEY}"
+base_url = "https://api.deepseek.com"
+default_text_model = "deepseek-chat"
+provider = "deepseek"
+
+[providers.deepseek]
+api_key = "${DEEPSEEK_API_KEY}"
+base_url = "https://api.deepseek.com"
+model = "deepseek-chat"
+
+[providers.openai]
+api_key = "${OPENAI_API_KEY}"
+base_url = "https://api.openai.com/v1"
+model = "gpt-4o"
+
+[network]
+web_search = { enabled = true, default_engine = "duckduckgo" }
+fetch_url = { enabled = true, max_size_mb = 10 }
+
+[snapshots]
+enabled = true
+max_snapshots = 50
+
+[lsp]
+enabled = false

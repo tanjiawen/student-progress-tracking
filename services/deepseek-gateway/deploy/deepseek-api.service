@@ -1,0 +1,41 @@
+[Unit]
+Description=DeepSeek TUI Runtime API Server
+Documentation=https://github.com/Hmbown/DeepSeek-TUI
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+
+# EDIT: set your Linux username
+User=tanjiawen
+Group=tanjiawen
+
+# EDIT: path to the deepseek binary (built from source or copied)
+ExecStart=/usr/local/bin/deepseek serve --http --host 127.0.0.1 --port 7878 --workers 4
+
+# API key: if not set, the server reads from ~/.deepseek/config.toml automatically.
+# Uncomment the line below to pass via environment instead:
+# Environment="DEEPSEEK_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+
+# Restart policy
+Restart=on-failure
+RestartSec=5
+StartLimitBurst=3
+StartLimitIntervalSec=60
+
+# Security hardening (optional — tighten as needed)
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/Users/tanjiawen/.deepseek
+ReadWritePaths=/usr/local/var/log
+
+# Logging
+StandardOutput=append:/usr/local/var/log/deepseek-api.log
+StandardError=append:/usr/local/var/log/deepseek-api.err
+SyslogIdentifier=deepseek-api
+
+[Install]
+WantedBy=multi-user.target

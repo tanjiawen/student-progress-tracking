@@ -127,6 +127,26 @@ services:
       - redis
     command: celery -A celery_worker.celery_app flower --port=5555
 
+  # DeepSeek Gateway (Rust LLM Service)
+  deepseek-gateway:
+    build:
+      context: ./services/deepseek-gateway
+      dockerfile: Dockerfile
+    container_name: spt-deepseek-gateway
+    ports:
+      - "8787:8787"
+    environment:
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - RUST_LOG=info
+    volumes:
+      - ./services/deepseek-gateway/config.toml:/app/config.toml:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8787/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # React Frontend
   frontend:
     build: ./frontend
