@@ -1,0 +1,102 @@
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    branches: [main]
+    types: [completed]
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  COMPOSE_FILE: docker-compose.prod.yml
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          cat >> ~/.ssh/config <<EOF
+          Host production
+            HostName ${{ secrets.SSH_HOST }}
+            User ${{ secrets.SSH_USER }}
+            IdentityFile ~/.ssh/deploy_key
+            StrictHostKeyChecking no
+          EOF
+
+      - name: Copy compose and config files
+        run: |
+          rsync -avz --delete \
+            --exclude='.git' \
+            --exclude='backend/.venv' \
+            --exclude='backend/__pycache__' \
+            --exclude='frontend/node_modules' \
+            --exclude='services/deepseek-gateway/target' \
+            -e "ssh -i ~/.ssh/deploy_key" \
+            ./ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/opt/student-progress-tracking/
+
+      - name: Deploy to server
+        run: |
+          ssh production << REMOTE_SCRIPT
+            set -euo pipefail
+            cd /opt/student-progress-tracking
+
+            # Export secrets as environment variables
+            export POSTGRES_PASSWORD="${POSTGRES_PASSWORD}"
+            export MINIO_ROOT_PASSWORD="${MINIO_ROOT_PASSWORD}"
+            export SECRET_KEY="${SECRET_KEY}"
+            export DEEPSEEK_API_KEY="${DEEPSEEK_API_KEY}"
+            export GRAFANA_ADMIN_PASSWORD="${GRAFANA_ADMIN_PASSWORD}"
+            export REGISTRY="${REGISTRY}"
+
+            # Pull latest images
+            docker-compose -f \${COMPOSE_FILE} pull
+
+            # Start services
+            docker-compose -f \${COMPOSE_FILE} up -d --remove-orphans
+
+            # Health check
+            echo "Waiting for services to be healthy..."
+            sleep 15
+
+            MAX_RETRIES=30
+            RETRY_COUNT=0
+            while [ \$RETRY_COUNT -lt \$MAX_RETRIES ]; do
+              HEALTH=\$(curl -sf http://localhost:80/health || echo "failed")
+              if [ "\$HEALTH" != "failed" ]; then
+                echo "Health check passed!"
+                exit 0
+              fi
+              RETRY_COUNT=\$((RETRY_COUNT + 1))
+              echo "Health check attempt \$RETRY_COUNT/\$MAX_RETRIES failed, retrying..."
+              sleep 5
+            done
+
+            echo "Health check failed after \$MAX_RETRIES attempts"
+            exit 1
+          REMOTE_SCRIPT
+        env:
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          MINIO_ROOT_PASSWORD: ${{ secrets.MINIO_ROOT_PASSWORD }}
+          SECRET_KEY: ${{ secrets.SECRET_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          GRAFANA_ADMIN_PASSWORD: ${{ secrets.GRAFANA_ADMIN_PASSWORD }}
+
+      - name: Rollback on failure
+        if: failure()
+        run: |
+          ssh production << REMOTE_SCRIPT
+            set -euo pipefail
+            cd /opt/student-progress-tracking
+            echo "Deployment failed, rolling back..."
+            docker-compose -f \${COMPOSE_FILE} down
+            docker-compose -f \${COMPOSE_FILE} up -d
+          REMOTE_SCRIPT

@@ -25,3 +25,8 @@ class UnauthorizedException(APIException):
 class ForbiddenException(APIException):
     def __init__(self, detail: str = "Forbidden"):
         super().__init__(status.HTTP_403_FORBIDDEN, detail, "forbidden")
+
+
+class RateLimitException(APIException):
+    def __init__(self, detail: str = "Rate limit exceeded"):
+        super().__init__(status.HTTP_429_TOO_MANY_REQUESTS, detail, "rate_limit")

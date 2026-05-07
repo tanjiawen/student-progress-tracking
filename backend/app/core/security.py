@@ -1,3 +1,14 @@
+# Fix bcrypt 4.2+ compatibility with passlib
+import bcrypt
+if not hasattr(bcrypt, "__about__"):
+    bcrypt.__about__ = type("obj", (object,), {"__version__": bcrypt.__version__})()
+_bcrypt_hashpw_orig = bcrypt.hashpw
+def _bcrypt_hashpw_fixed(password: bytes, salt: bytes) -> bytes:
+    if len(password) > 72:
+        password = password[:72]
+    return _bcrypt_hashpw_orig(password, salt)
+bcrypt.hashpw = _bcrypt_hashpw_fixed
+
 from datetime import UTC, datetime, timedelta
 from typing import Any
 

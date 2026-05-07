@@ -32,7 +32,9 @@ class Settings(BaseSettings):
     # AI
     DEEPSEEK_API_KEY: str | None = None
     DEEPSEEK_BASE_URL: str = "https://api.deepseek.com"
+    DEEPSEEK_GATEWAY_URL: str | None = None
     OPENAI_API_KEY: str | None = None
+    DASHSCOPE_API_KEY: str | None = None
     MATHPIX_APP_ID: str | None = None
     MATHPIX_API_KEY: str | None = None
 
@@ -43,6 +45,19 @@ class Settings(BaseSettings):
     # Celery
     CELERY_BROKER_URL: str = "redis://localhost:6379/1"
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/2"
+
+    # Logging
+    LOG_LEVEL: str = "INFO"
+
+    # Security
+    MASKING_ENABLED: bool = True
+    ALLOWED_ORIGINS: str = "http://localhost:5173,http://localhost:3000"
+    MAX_UPLOAD_SIZE_MB: int = 20
+
+    # Rate Limiting (requests per minute)
+    RATE_LIMIT_FREE: int = 10
+    RATE_LIMIT_STANDARD: int = 100
+    RATE_LIMIT_PREMIUM: int = 1000
 
     class Config:
         env_file = ".env"

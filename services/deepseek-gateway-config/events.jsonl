@@ -1,0 +1,3 @@
+{"at":"2026-05-07T14:39:16.231718+00:00","event":{"response_id":"resp-269ba6ac-00ba-429a-8b71-c912b4ee24b9","type":"response_start"}}
+{"at":"2026-05-07T14:39:16.231894+00:00","event":{"delta":"model-selected","response_id":"resp-269ba6ac-00ba-429a-8b71-c912b4ee24b9","type":"response_delta"}}
+{"at":"2026-05-07T14:39:16.231979+00:00","event":{"response_id":"resp-269ba6ac-00ba-429a-8b71-c912b4ee24b9","type":"response_end"}}

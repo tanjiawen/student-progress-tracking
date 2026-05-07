@@ -18,10 +18,10 @@ class QwenVLClient(BaseLLMClient):
     """Qwen-VL 多模态客户端"""
 
     def __init__(self):
-        self.api_key = settings.OPENAI_API_KEY or ""
-        self.base_url = settings.DEEPSEEK_BASE_URL or "https://dashscope.aliyuncs.com/api/v1"
+        self.api_key = settings.DASHSCOPE_API_KEY or settings.OPENAI_API_KEY or ""
+        self.base_url = "https://dashscope.aliyuncs.com/compatible-mode/v1"
         self.model = "qwen-vl-max"
-        self.timeout = 60.0
+        self.timeout = 180.0
 
     def _encode_image(self, image_bytes: bytes) -> str:
         """将图片转为 base64"""
@@ -52,13 +52,13 @@ class QwenVLClient(BaseLLMClient):
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             response = await client.post(
-                f"{self.base_url}/services/aigc/multimodal-generation/generation",
+                f"{self.base_url}/chat/completions",
                 headers=headers,
                 json=payload,
             )
             response.raise_for_status()
             data = response.json()
-            return data["output"]["choices"][0]["message"]["content"]
+            return data["choices"][0]["message"]["content"]
 
     async def chat_with_image(
         self,
@@ -95,13 +95,13 @@ class QwenVLClient(BaseLLMClient):
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             response = await client.post(
-                f"{self.base_url}/services/aigc/multimodal-generation/generation",
+                f"{self.base_url}/chat/completions",
                 headers=headers,
                 json=payload,
             )
             response.raise_for_status()
             data = response.json()
-            return data["output"]["choices"][0]["message"]["content"]
+            return data["choices"][0]["message"]["content"]
 
     async def recognize_exam_page(
         self,

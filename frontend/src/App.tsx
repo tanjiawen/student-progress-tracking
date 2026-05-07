@@ -1,13 +1,10 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import Login from './pages/Login'
+import { BrowserRouter } from 'react-router-dom'
+import AppRouter from './router'
 
 function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route path="/" element={<Navigate to="/login" replace />} />
-      </Routes>
+      <AppRouter />
     </BrowserRouter>
   )
 }

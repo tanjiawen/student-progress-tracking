@@ -1,0 +1,687 @@
+{
+  "student_info": {
+    "name": "谭子凌",
+    "class": "八(28)班",
+    "exam_room": "七考场",
+    "seat_number": "37号",
+    "student_id": "24022845",
+    "subject": "道德与法治"
+  },
+  "exam_info": {
+    "title": "2026年春季学期八年级期中质量调研",
+    "subject": "道德与法治学科",
+    "total_score": 56,
+    "objective_score": 28,
+    "subjective_score": 28,
+    "max_score": 100
+  },
+  "learning_analysis": {
+    "overall_evaluation": "谭子凌同学本次考试总分56分，处于班级中等偏下水平。客观题失分较多（共失19分），主观题虽有一定得分但存在表述不完整、概念混淆、字迹不清等问题。整体来看，基础知识掌握不扎实，答题规范性有待提升，但仍有较大进步空间。",
+    "mastered_knowledge": [
+      "尊重他人权利",
+      "社会公德",
+      "党的领导、人民当家作主、依法治国统一"
+    ],
+    "weak_knowledge": [
+      "宪法是根本活动准则",
+      "民族区域自治制度",
+      "基层群众自治制度",
+      "全国人大的立法权",
+      "非公有制经济"
+    ],
+    "error_patterns": [
+      {
+        "type": "概念混淆",
+        "description": "将相似制度或概念混淆，如民族区域自治制度与基层群众自治制度混用",
+        "examples": [
+          "22(2)"
+        ]
+      },
+      {
+        "type": "表述不完整",
+        "description": "答题时遗漏核心知识点，如未提及宪法是根本活动准则",
+        "examples": [
+          "19新闻三"
+        ]
+      },
+      {
+        "type": "逻辑不清",
+        "description": "主观题答案逻辑链条不清晰，语句组织混乱",
+        "examples": [
+          "21(2)"
+        ]
+      },
+      {
+        "type": "字迹不清",
+        "description": "部分答案字迹潦草或模糊，影响得分",
+        "examples": [
+          "19新闻二",
+          "19新闻四",
+          "22(2)"
+        ]
+      }
+    ],
+    "short_term_suggestions": [
+      "1. 整理选择题错题，对照教材找出对应知识点，每天复习5道错题。",
+      "2. 针对字迹问题，每天练习10分钟正楷字，确保答题卡清晰可辨。"
+    ],
+    "mid_term_suggestions": [
+      "1. 系统复习宪法、民族区域自治制度、基层群众自治制度等薄弱知识点，制作思维导图。",
+      "2. 练习主观题答题模板，注重逻辑分层和关键词提取，每周完成2道完整主观题。"
+    ],
+    "long_term_suggestions": [
+      "1. 养成定期整理错题本的习惯，每周回顾一次。",
+      "2. 培养审题和答题规范意识，每次练习后自我检查是否遗漏核心知识点。"
+    ],
+    "next_exam_target": 68,
+    "model": "deepseek-v4-flash",
+    "usage": {
+      "prompt_tokens": 905,
+      "completion_tokens": 488,
+      "total_tokens": 1393,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      },
+      "prompt_cache_hit_tokens": 0,
+      "prompt_cache_miss_tokens": 905
+    }
+  },
+  "knowledge_mastery": [
+    {
+      "knowledge_point": "公民权利与义务的统一",
+      "mastery_level": 1.0,
+      "confidence": 0.5,
+      "suggested_difficulty": "easy",
+      "priority_review": false
+    },
+    {
+      "knowledge_point": "依法行使权利",
+      "mastery_level": 1.0,
+      "confidence": 0.5,
+      "suggested_difficulty": "easy",
+      "priority_review": false
+    },
+    {
+      "knowledge_point": "不得损害他人合法权益",
+      "mastery_level": 1.0,
+      "confidence": 0.5,
+      "suggested_difficulty": "easy",
+      "priority_review": false
+    },
+    {
+      "knowledge_point": "尊重他人权利",
+      "mastery_level": 0.75,
+      "confidence": 0.5,
+      "suggested_difficulty": "medium",
+      "priority_review": false
+    },
+    {
+      "knowledge_point": "社会公德",
+      "mastery_level": 0.75,
+      "confidence": 0.5,
+      "suggested_difficulty": "medium",
+      "priority_review": false
+    },
+    {
+      "knowledge_point": "宪法的最高法律地位",
+      "mastery_level": 1.0,
+      "confidence": 0.5,
+      "suggested_difficulty": "easy",
+      "priority_review": false
+    },
+    {
+      "knowledge_point": "宪法是国家的根本法",
+      "mastery_level": 1.0,
+      "confidence": 0.5,
+      "suggested_difficulty": "easy",
+      "priority_review": false
+    },
+    {
+      "knowledge_point": "党的领导、人民当家作主、依法治国统一",
+      "mastery_level": 0.5,
+      "confidence": 0.5,
+      "suggested_difficulty": "hard",
+      "priority_review": true
+    },
+    {
+      "knowledge_point": "全国人大的立法权",
+      "mastery_level": 0.5,
+      "confidence": 0.5,
+      "suggested_difficulty": "hard",
+      "priority_review": true
+    },
+    {
+      "knowledge_point": "非公有制经济",
+      "mastery_level": 0.625,
+      "confidence": 0.7,
+      "suggested_difficulty": "medium",
+      "priority_review": false
+    },
+    {
+      "knowledge_point": "民族区域自治制度",
+      "mastery_level": 0.5,
+      "confidence": 0.5,
+      "suggested_difficulty": "hard",
+      "priority_review": true
+    },
+    {
+      "knowledge_point": "基层群众自治",
+      "mastery_level": 0.5,
+      "confidence": 0.5,
+      "suggested_difficulty": "hard",
+      "priority_review": true
+    },
+    {
+      "knowledge_point": "保护文化遗产",
+      "mastery_level": 1.0,
+      "confidence": 0.5,
+      "suggested_difficulty": "easy",
+      "priority_review": false
+    },
+    {
+      "knowledge_point": "公民义务",
+      "mastery_level": 1.0,
+      "confidence": 0.5,
+      "suggested_difficulty": "easy",
+      "priority_review": false
+    },
+    {
+      "knowledge_point": "传承传统文化",
+      "mastery_level": 1.0,
+      "confidence": 0.5,
+      "suggested_difficulty": "easy",
+      "priority_review": false
+    }
+  ],
+  "raw_ocr_data": {
+    "ocr_source": "manual_vision_extraction",
+    "extraction_date": "2026-05-07",
+    "image_file": "20260507-155657.png",
+    "image_dimensions": [
+      2480,
+      1753
+    ],
+    "student_info": {
+      "name": "谭子凌",
+      "class": "八(28)班",
+      "exam_room": "七考场",
+      "seat_number": "37号",
+      "student_id": "24022845",
+      "subject": "道德与法治"
+    },
+    "exam_info": {
+      "title": "2026年春季学期八年级期中质量调研",
+      "subject": "道德与法治学科",
+      "total_score": 56,
+      "objective_score": 28,
+      "subjective_score": 28,
+      "max_score": 100
+    },
+    "sections": [
+      {
+        "section_number": "I",
+        "section_title": "选择题",
+        "total_score": 36,
+        "student_score": 28,
+        "questions": [
+          {
+            "number": 1,
+            "type": "choice",
+            "options": [
+              "A",
+              "B",
+              "C",
+              "D"
+            ],
+            "student_answer": "B",
+            "score": 2,
+            "max_score": 2
+          },
+          {
+            "number": 2,
+            "type": "choice",
+            "options": [
+              "A",
+              "B",
+              "C",
+              "D"
+            ],
+            "student_answer": "D",
+            "score": 2,
+            "max_score": 2
+          },
+          {
+            "number": 3,
+            "type": "choice",
+            "options": [
+              "A",
+              "B",
+              "C",
+              "D"
+            ],
+            "student_answer": "C",
+            "score": 2,
+            "max_score": 2
+          },
+          {
+            "number": 4,
+            "type": "choice",
+            "options": [
+              "A",
+              "B",
+              "C",
+              "D"
+            ],
+            "student_answer": "B",
+            "score": 2,
+            "max_score": 2
+          },
+          {
+            "number": 5,
+            "type": "choice",
+            "options": [
+              "A",
+              "B",
+              "C",
+              "D"
+            ],
+            "student_answer": "C",
+            "score": 2,
+            "max_score": 2
+          },
+          {
+            "number": 6,
+            "type": "choice",
+            "options": [
+              "A",
+              "B",
+              "C",
+              "D"
+            ],
+            "student_answer": "A",
+            "score": 2,
+            "max_score": 2
+          },
+          {
+            "number": 7,
+            "type": "choice",
+            "options": [
+              "A",
+              "B",
+              "C",
+              "D"
+            ],
+            "student_answer": "B",
+            "score": 2,
+            "max_score": 2
+          },
+          {
+            "number": 8,
+            "type": "choice",
+            "options": [
+              "A",
+              "B",
+              "C",
+              "D"
+            ],
+            "student_answer": "D",
+            "score": 2,
+            "max_score": 2
+          },
+          {
+            "number": 9,
+            "type": "choice",
+            "options": [
+              "A",
+              "B",
+              "C",
+              "D"
+            ],
+            "student_answer": "A",
+            "score": 2,
+            "max_score": 2
+          },
+          {
+            "number": 10,
+            "type": "choice",
+            "options": [
+              "A",
+              "B",
+              "C",
+              "D"
+            ],
+            "student_answer": "C",
+            "score": 2,
+            "max_score": 2
+          },
+          {
+            "number": 11,
+            "type": "choice",
+            "options": [
+              "A",
+              "B",
+              "C",
+              "D"
+            ],
+            "student_answer": "B",
+            "score": 2,
+            "max_score": 2
+          },
+          {
+            "number": 12,
+            "type": "choice",
+            "options": [
+              "A",
+              "B",
+              "C",
+              "D"
+            ],
+            "student_answer": "D",
+            "score": 2,
+            "max_score": 2
+          },
+          {
+            "number": 13,
+            "type": "choice",
+            "options": [
+              "A",
+              "B",
+              "C",
+              "D"
+            ],
+            "student_answer": "A",
+            "score": 2,
+            "max_score": 2
+          },
+          {
+            "number": 14,
+            "type": "choice",
+            "options": [
+              "A",
+              "B",
+              "C",
+              "D"
+            ],
+            "student_answer": "C",
+            "score": 0,
+            "max_score": 2
+          },
+          {
+            "number": 15,
+            "type": "choice",
+            "options": [
+              "A",
+              "B",
+              "C",
+              "D"
+            ],
+            "student_answer": "D",
+            "score": 0,
+            "max_score": 2
+          },
+          {
+            "number": 16,
+            "type": "choice",
+            "options": [
+              "A",
+              "B",
+              "C",
+              "D"
+            ],
+            "student_answer": "B",
+            "score": 0,
+            "max_score": 2
+          },
+          {
+            "number": 17,
+            "type": "choice",
+            "options": [
+              "A",
+              "B",
+              "C",
+              "D"
+            ],
+            "student_answer": "A",
+            "score": 0,
+            "max_score": 2
+          },
+          {
+            "number": 18,
+            "type": "choice",
+            "options": [
+              "A",
+              "B",
+              "C",
+              "D"
+            ],
+            "student_answer": "C",
+            "score": 0,
+            "max_score": 2
+          }
+        ]
+      },
+      {
+        "section_number": "II",
+        "section_title": "非选择题",
+        "total_score": 39,
+        "student_score": 28,
+        "questions": [
+          {
+            "number": 19,
+            "type": "short_answer",
+            "title": "新闻分析题",
+            "max_score": 8,
+            "student_score": 4,
+            "sub_questions": [
+              {
+                "sub_number": "新闻一",
+                "content": "全国人民代表大会制度是我国的根本政治制度，人民政协积极履行参政议政的职能。",
+                "score": 2,
+                "max_score": 2,
+                "feedback": "对"
+              },
+              {
+                "sub_number": "新闻二",
+                "content": "小王积极履行宪法和法律规定的义务，坚持国家利益至欢（上）态。",
+                "score": 1,
+                "max_score": 2,
+                "feedback": "部分正确，表述不完整",
+                "issues": [
+                  "\"至欢（上）态\"字迹不清，应为\"至上\"或类似表述"
+                ]
+              },
+              {
+                "sub_number": "新闻三",
+                "content": "依宪法国家要求一切组织和公民需要在宪法和法律规定范围内活动。任何违背宪法和法律的行为是违法行为，要负法律责任",
+                "score": 1,
+                "max_score": 2,
+                "feedback": "部分正确，缺少要点",
+                "issues": [
+                  "未提及宪法是根本活动准则这一核心知识点"
+                ]
+              },
+              {
+                "sub_number": "新闻四",
+                "content": "各民族在长期的交往交流交融中确（下）铸牢中华民族共同体意识的社会主义民族关系。",
+                "score": 0,
+                "max_score": 2,
+                "feedback": "错误或未答完整",
+                "issues": [
+                  "字迹不清「确（下）」部分无法辨认",
+                  "未完整阐述民族关系相关内容"
+                ]
+              }
+            ]
+          },
+          {
+            "number": 20,
+            "type": "short_answer",
+            "title": "情景分析题",
+            "max_score": 10,
+            "student_score": 9,
+            "sub_questions": [
+              {
+                "sub_number": "(1)",
+                "content": "\"暴走团\"的行为是不对的。任何公民在行使权利的同时，不得以损害国家的、集体的、公民的合法的利益。\"暴走团\"半夜放音乐，打扰公民休息，损害了公民的利益。需依法行使权利，任何破坏他人权利和利益的行为需要负相应的责任。",
+                "score": 6,
+                "max_score": 6,
+                "feedback": "满分",
+                "knowledge_points": [
+                  "公民权利与义务的统一",
+                  "依法行使权利",
+                  "不得损害他人合法权益"
+                ]
+              },
+              {
+                "sub_number": "(2)",
+                "content": "在规定时间内健身。健身音乐不要放大声。健身运动时小声一点，避免打扰他人。",
+                "score": 3,
+                "max_score": 4,
+                "feedback": "基本正确，缺少具体法律依据",
+                "knowledge_points": [
+                  "尊重他人权利",
+                  "社会公德"
+                ],
+                "issues": [
+                  "未引用具体法律条文或规定"
+                ]
+              }
+            ]
+          },
+          {
+            "number": 21,
+            "type": "short_answer",
+            "title": "法律与宪法题",
+            "max_score": 9,
+            "student_score": 6,
+            "sub_questions": [
+              {
+                "sub_number": "(1)",
+                "content": "\"法律金字塔\"的上方应是宪法。宪法是各制度和法律的总依据、总源头。在法律体系中具有最高的法律地位、法律权威和法律效力",
+                "score": 3,
+                "max_score": 3,
+                "feedback": "满分",
+                "knowledge_points": [
+                  "宪法的最高法律地位",
+                  "宪法是国家的根本法"
+                ]
+              },
+              {
+                "sub_number": "(2)",
+                "content": "\"生态兴则文明兴\"，党领导人民制定要实现党的主张与人民意识的高度统一，反映了（人民的利益）。体现了人民的意志，是一项扎根人民，回应民生的法律系统工作。党领导人民制定《生态环境法典》，征求社会公众意见，集中了人民的智慧。2026年3月12日，全国人大四次会议表决通过《中华人民共和国生态环境法》。全国人大行使了立法权。全国人民代表大会",
+                "score": 3,
+                "max_score": 6,
+                "feedback": "部分正确，逻辑较混乱，要点不全",
+                "knowledge_points": [
+                  "党的领导、人民当家作主、依法治国统一",
+                  "全国人大的立法权"
+                ],
+                "issues": [
+                  "逻辑链条不清晰，语句组织混乱",
+                  "\"2026年3月12日\"时间表述可能有误",
+                  "未明确区分\"党领导立法\"和\"人大行使立法权\"的关系"
+                ]
+              }
+            ]
+          },
+          {
+            "number": 22,
+            "type": "short_answer",
+            "title": "综合探究题",
+            "max_score": 12,
+            "student_score": 9,
+            "sub_questions": [
+              {
+                "sub_number": "(1)",
+                "content": "非公有制经济。",
+                "score": 2,
+                "max_score": 2,
+                "feedback": "满分",
+                "knowledge_points": [
+                  "非公有制经济"
+                ]
+              },
+              {
+                "sub_number": "(2)",
+                "content": "坚持民族区域自治制度，为文明传承。举办婚丧嫁娶，修改《村规民约》，规定了村里（内容）。坚持民族区域自治制度，族结合老地（应为\"毛南族文化\"）传承的实际需要，通过《环江毛南族自治县非物质文化遗产（保护）条例》守护了传承，推了社会进步与发展。坚持社会主义市场经济制度，毫不动摇鼓励、引导支持非公有制经济发展。村民将闲置老房子改造等一些行为，经济改良，得到发展，拿到分红。",
+                "score": 3,
+                "max_score": 6,
+                "feedback": "部分正确，概念混淆",
+                "knowledge_points": [
+                  "民族区域自治制度",
+                  "非公有制经济",
+                  "基层群众自治"
+                ],
+                "issues": [
+                  "将\"民族区域自治制度\"与\"基层群众自治\"混淆",
+                  "《村规民约》属于基层群众自治，不是民族区域自治制度的内容",
+                  "\"族结合老地\"字迹不清，应为\"毛南族文化\""
+                ]
+              },
+              {
+                "sub_number": "(3)",
+                "content": "当游客在参观时触摸文物，提醒他并（说明）规则。告诉他这的文物是受国家保护，不能随意触摸。毛南族\"傩面\"\"雕刻\"技艺面临失传问题，可以举行活动，让他人参与，感兴趣就可以深入学习，对外宣扬出去，会吸引更多的人来。",
+                "score": 4,
+                "max_score": 4,
+                "feedback": "满分",
+                "knowledge_points": [
+                  "保护文化遗产",
+                  "公民义务",
+                  "传承传统文化"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "teacher_marks": {
+      "total_score": 56,
+      "objective_score": 28,
+      "subjective_score": 28,
+      "red_marks": [
+        {
+          "location": "19题",
+          "score": "4/8",
+          "meaning": "得分4分，满分8分"
+        },
+        {
+          "location": "20(1)",
+          "score": "6/6",
+          "meaning": "满分"
+        },
+        {
+          "location": "20(2)",
+          "score": "3/4",
+          "meaning": "扣1分"
+        },
+        {
+          "location": "21(1)",
+          "score": "3/3",
+          "meaning": "满分"
+        },
+        {
+          "location": "21(2)",
+          "score": "3/6",
+          "meaning": "扣3分"
+        },
+        {
+          "location": "22(1)",
+          "score": "2/2",
+          "meaning": "满分"
+        },
+        {
+          "location": "22(2)",
+          "score": "3/6",
+          "meaning": "扣3分"
+        },
+        {
+          "location": "22(3)",
+          "score": "4/4",
+          "meaning": "满分"
+        }
+      ]
+    }
+  },
+  "generated_at": "2026-05-07T10:23:27.137517+00:00"
+}

@@ -1,358 +1,517 @@
 """
 考试/试卷 API 路由
-核心功能：上传、OCR、题目解析、判卷
+核心功能：上传、OCR、题目解析、判卷、结果统计
 """
 
-from typing import Any
+from __future__ import annotations
 
-from fastapi import APIRouter, File, Form, UploadFile, status
+from collections import defaultdict
+from datetime import datetime, timezone
 
-from app.core.exceptions import BadRequestException
-from app.services.grading_engine import grading_engine
-from app.services.knowledge_tracker import knowledge_tracker
-from app.services.layout_parser import ParsedQuestion, layout_parser
+from fastapi import APIRouter, Depends, File, Form, Response, UploadFile, status
+from sqlmodel import func, select
+from sqlmodel.ext.asyncio.session import AsyncSession
+
+from app.core.config import settings
+from app.core.database import get_session
+from app.core.dependencies import get_current_user
+from app.core.exceptions import BadRequestException, NotFoundException
+from app.core.rate_limiter import rate_limit_dependency
+from app.models.exam import Exam, ExamStatus, ExamType
+from app.models.exam_question import ExamQuestion
+from app.models.grading_result import GradingResult
+from app.models.student import Student
+from app.models.submission import Submission
+from app.models.subject import Subject
+from app.models.user import User
+from app.repositories.exam import ExamRepository
+from app.repositories.exam_question import ExamQuestionRepository
+from app.repositories.grading_result import GradingResultRepository
+from app.repositories.student import StudentRepository
+from app.repositories.submission import SubmissionRepository
+from app.repositories.subject import SubjectRepository
+from app.schemas.common import BaseResponse, PaginatedResponse
+from app.schemas.exam import ExamRead
+from app.services.pdf_exporter import PDFExporter
 from app.services.pdf_service import pdf_service
 from app.services.storage_service import storage_service
+from app.services.watermark_service import watermark_service
 
 router = APIRouter()
 
 
-# 内存中的临时存储（实际应使用数据库）
-_exams: dict[int, dict] = {}
-_exam_questions: dict[int, list[ParsedQuestion]] = {}
-_next_exam_id = 1
+def _exam_to_dict(exam: Exam, subject_name: str | None = None) -> dict:
+    """Convert Exam ORM object to a response dict compatible with ExamRead."""
+    return {
+        "id": exam.id,
+        "title": exam.title,
+        "description": None,
+        "subject": subject_name or "",
+        "grade_level": None,
+        "total_score": float(exam.total_score) if exam.total_score is not None else 100.0,
+        "duration_minutes": None,
+        "exam_date": exam.exam_date,
+        "status": exam.status.value if hasattr(exam.status, "value") else str(exam.status),
+        "created_by": exam.created_by,
+        "created_at": exam.created_at,
+        "updated_at": exam.updated_at,
+    }
 
 
-@router.post("/upload", status_code=status.HTTP_201_CREATED)
+@router.post("/upload", response_model=BaseResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(rate_limit_dependency)])
 async def upload_exam(
     file: UploadFile = File(...),
     title: str = Form(""),
-    subject: str = Form("数学"),
-) -> Any:
-    """
-    上传考试试卷（PDF 或图片）
+    subject: str = Form(""),
+    class_id: int = Form(...),
+    session: AsyncSession = Depends(get_session),
+    current_user: dict = Depends(get_current_user),
+) -> BaseResponse:
+    """上传考试试卷（PDF 或图片）并创建考试记录.
 
-    - file: PDF 或图片文件
+    - file: PDF 或图片文件（最大 20MB，仅限 PDF/PNG/JPG）
     - title: 考试名称
-    - subject: 学科
+    - subject: 学科名称
+    - class_id: 班级 ID
     """
-    global _next_exam_id
-
     if not file.filename:
-        raise BadRequestException("未提供文件") from None
+        raise BadRequestException("未提供文件")
 
-    # 读取文件内容
     contents = await file.read()
     if len(contents) == 0:
-        raise BadRequestException("文件为空") from None
+        raise BadRequestException("文件为空")
 
-    # 判断文件类型
+    # 文件大小限制（最大 20MB）
+    max_size = settings.MAX_UPLOAD_SIZE_MB * 1024 * 1024
+    if len(contents) > max_size:
+        raise BadRequestException(f"文件大小超过限制（最大 {settings.MAX_UPLOAD_SIZE_MB}MB）")
+
+    # 严格的文件类型检查：仅允许 PDF/PNG/JPG
+    allowed_exts = {".pdf", ".png", ".jpg", ".jpeg"}
+    ext = f".{file.filename.split('.')[-1].lower()}" if "." in file.filename else ""
+    if ext not in allowed_exts:
+        raise BadRequestException("仅支持 PDF、PNG、JPG 格式")
+
     content_type = file.content_type or ""
     is_pdf = content_type == "application/pdf" or file.filename.lower().endswith(".pdf")
-    is_image = content_type.startswith("image/") or any(
-        file.filename.lower().endswith(ext)
-        for ext in [".jpg", ".jpeg", ".png", ".webp"]
-    )
+    is_image = content_type.startswith("image/") or ext in {".png", ".jpg", ".jpeg"}
 
     if not is_pdf and not is_image:
-        raise BadRequestException("仅支持 PDF 或图片格式（jpg/png/webp）")
+        raise BadRequestException("仅支持 PDF 或图片格式（jpg/png）")
+
+    # 查找或确认学科
+    subject_repo = SubjectRepository(session)
+    stmt = select(Subject).where(Subject.name == subject)
+    result = await session.exec(stmt)
+    db_subject = result.first()
+    if not db_subject:
+        # 如果找不到，尝试用名称作为 code 查找
+        db_subject = await subject_repo.get_by_code(subject)
+    if not db_subject:
+        raise BadRequestException(f"学科 '{subject}' 不存在，请先创建学科")
 
     # 创建考试记录
-    exam_id = _next_exam_id
-    _next_exam_id += 1
+    exam = Exam(
+        title=title or f"考试 {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M')}",
+        subject_id=db_subject.id,
+        class_id=class_id,
+        exam_type="quiz",
+        total_score=100.0,
+        status=ExamStatus.DRAFT,
+        exam_date=datetime.now(timezone.utc),
+        created_by=current_user.id,
+    )
+    exam = await ExamRepository(session).create(exam)
 
-    exam = {
-        "id": exam_id,
-        "title": title or f"考试 {exam_id}",
-        "subject": subject,
-        "filename": file.filename,
-        "status": "uploaded",
-        "pages": [],
-        "questions": [],
-    }
-
-    # 处理 PDF：转图片
+    # 上传文件到 MinIO
     if is_pdf:
         images = pdf_service.pdf_to_images(contents, dpi=300, enhance=True)
-
         for page_num, img_bytes, fmt in images:
-            object_name = storage_service.upload_image(
+            storage_service.upload_image(
                 file_data=img_bytes,
                 filename=f"page_{page_num}.{fmt}",
-                exam_id=exam_id,
+                exam_id=exam.id,
                 page_number=page_num,
             )
-            exam["pages"].append({
-                "page_number": page_num,
-                "object_name": object_name,
-                "format": fmt,
-            })
-
-        exam["page_count"] = len(images)
-
     else:
-        # 单张图片
-        object_name = storage_service.upload_image(
-            file_data=contents,
+        # 对直接上传的图片添加水印（PDF 转图在后续 OCR 流程中处理，暂不添加）
+        watermarked = watermark_service.add_watermark(
+            contents, f"Exam-{exam.id} User-{current_user.id}"
+        )
+        ext = file.filename.split(".")[-1].lower() if "." in file.filename else "jpg"
+        storage_service.upload_image(
+            file_data=watermarked,
             filename=file.filename,
-            exam_id=exam_id,
+            exam_id=exam.id,
             page_number=1,
         )
-        exam["pages"].append({
-            "page_number": 1,
-            "object_name": object_name,
-            "format": file.filename.split(".")[-1].lower(),
-        })
-        exam["page_count"] = 1
 
-    _exams[exam_id] = exam
+    return BaseResponse(
+        data=_exam_to_dict(exam, subject_name=db_subject.name),
+        message="上传成功，请调用 /exams/{exam_id}/start-ocr 进行识别",
+    )
 
-    return {
-        "success": True,
-        "exam_id": exam_id,
-        "title": exam["title"],
-        "page_count": exam["page_count"],
-        "status": "uploaded",
-        "message": f"上传成功，共 {exam['page_count']} 页，请调用 /exams/{exam_id}/ocr 进行识别",
+
+@router.post("", response_model=BaseResponse, status_code=status.HTTP_201_CREATED)
+async def create_exam(
+    title: str = Form(...),
+    subject: str = Form(...),
+    class_id: int = Form(...),
+    session: AsyncSession = Depends(get_session),
+    current_user: dict = Depends(get_current_user),
+) -> BaseResponse:
+    """创建考试记录（不上传文件，仅创建元数据）."""
+    # 查找学科（先按 name，再按 code）
+    stmt = select(Subject).where(Subject.name == subject)
+    result = await session.exec(stmt)
+    db_subject = result.first()
+    if not db_subject:
+        stmt = select(Subject).where(Subject.code == subject)
+        result = await session.exec(stmt)
+        db_subject = result.first()
+    if not db_subject:
+        raise BadRequestException(f"学科 '{subject}' 不存在")
+
+    exam = Exam(
+        title=title,
+        subject_id=db_subject.id,
+        class_id=class_id,
+        exam_type=ExamType.QUIZ,
+        total_score=100.0,
+        status=ExamStatus.READY,
+        created_by=getattr(current_user, "id", 1),
+        exam_date=datetime.now(timezone.utc),
+    )
+    session.add(exam)
+    await session.commit()
+    await session.refresh(exam)
+
+    return BaseResponse(
+        data=_exam_to_dict(exam, subject_name=db_subject.name),
+        message="考试创建成功",
+    )
+
+
+@router.get("", response_model=BaseResponse)
+async def list_exams(
+    class_id: int | None = None,
+    subject_id: int | None = None,
+    status: str | None = None,
+    skip: int = 0,
+    limit: int = 20,
+    session: AsyncSession = Depends(get_session),
+    current_user: dict = Depends(get_current_user),
+) -> BaseResponse:
+    """获取考试列表，支持分页与筛选."""
+    where_clauses = []
+    if class_id is not None:
+        where_clauses.append(Exam.class_id == class_id)
+    if subject_id is not None:
+        where_clauses.append(Exam.subject_id == subject_id)
+    if status is not None:
+        where_clauses.append(Exam.status == status)
+
+    total_stmt = select(func.count(Exam.id))
+    list_stmt = select(Exam).offset(skip).limit(limit).order_by(Exam.created_at.desc())
+    if where_clauses:
+        total_stmt = total_stmt.where(*where_clauses)
+        list_stmt = list_stmt.where(*where_clauses)
+
+    total_result = await session.exec(total_stmt)
+    total = total_result.one()
+
+    list_result = await session.exec(list_stmt)
+    exams = list(list_result.all())
+
+    # 组装学科名称
+    subject_repo = SubjectRepository(session)
+    subject_ids = {e.subject_id for e in exams}
+    subjects = {}
+    for sid in subject_ids:
+        sub = await subject_repo.get_by_id(sid) if sid else None
+        if sub:
+            subjects[sid] = sub.name
+
+    items = [_exam_to_dict(e, subject_name=subjects.get(e.subject_id, "")) for e in exams]
+    total_pages = (total + limit - 1) // limit if limit > 0 else 0
+    page = skip // limit + 1 if limit > 0 else 1
+
+    return BaseResponse(
+        data=PaginatedResponse(
+            items=items,
+            total=total,
+            page=page,
+            page_size=limit,
+            total_pages=total_pages,
+        ),
+    )
+
+
+@router.get("/{exam_id}", response_model=BaseResponse)
+async def get_exam(
+    exam_id: int,
+    session: AsyncSession = Depends(get_session),
+    current_user: dict = Depends(get_current_user),
+) -> BaseResponse:
+    """获取考试详情（含题目列表）."""
+    exam = await ExamRepository(session).get_by_id(exam_id)
+    if not exam:
+        raise NotFoundException("考试不存在")
+
+    questions = await ExamQuestionRepository(session).get_by_exam_ordered(exam_id)
+    subject = await SubjectRepository(session).get_by_id(exam.subject_id) if exam.subject_id else None
+
+    return BaseResponse(
+        data={
+            "exam": _exam_to_dict(exam, subject_name=subject.name if subject else ""),
+            "questions": [
+                {
+                    "id": q.id,
+                    "sequence_number": q.sequence_number,
+                    "question_type": q.question_type.value if hasattr(q.question_type, "value") else str(q.question_type),
+                    "content": q.content,
+                    "content_latex": q.content_latex,
+                    "options": q.options,
+                    "score": float(q.score) if q.score is not None else 0.0,
+                    "ocr_confidence": q.ocr_confidence,
+                    "status": q.status.value if hasattr(q.status, "value") else str(q.status),
+                }
+                for q in questions
+            ],
+        },
+    )
+
+
+@router.post("/{exam_id}/start-ocr", response_model=BaseResponse)
+async def start_exam_ocr(
+    exam_id: int,
+    session: AsyncSession = Depends(get_session),
+    current_user: dict = Depends(get_current_user),
+) -> BaseResponse:
+    """启动考试 OCR 识别任务.
+
+    要求考试状态为 draft。
+    """
+    exam = await ExamRepository(session).get_by_id(exam_id)
+    if not exam:
+        raise NotFoundException("考试不存在")
+    if exam.status != ExamStatus.DRAFT:
+        raise BadRequestException(
+            f"当前状态 {exam.status.value if hasattr(exam.status, 'value') else exam.status} 不支持 OCR"
+        )
+
+    await ExamRepository(session).update_status(exam_id, ExamStatus.PROCESSING)
+
+    from app.tasks.ocr import process_exam_ocr
+
+    task = process_exam_ocr.delay(exam_id)
+    return BaseResponse(data={"task_id": task.id})
+
+
+@router.post("/{exam_id}/start-grading", response_model=BaseResponse)
+async def start_exam_grading(
+    exam_id: int,
+    session: AsyncSession = Depends(get_session),
+    current_user: dict = Depends(get_current_user),
+) -> BaseResponse:
+    """启动考试批量判卷任务.
+
+    要求考试状态为 ready。
+    """
+    exam = await ExamRepository(session).get_by_id(exam_id)
+    if not exam:
+        raise NotFoundException("考试不存在")
+    if exam.status != ExamStatus.READY:
+        raise BadRequestException(
+            f"当前状态 {exam.status.value if hasattr(exam.status, 'value') else exam.status} 不支持判卷"
+        )
+
+    await ExamRepository(session).update_status(exam_id, ExamStatus.GRADING)
+
+    from app.tasks.grading import batch_grade_exam
+
+    task = batch_grade_exam.delay(exam_id)
+    return BaseResponse(data={"task_id": task.id})
+
+
+@router.get("/{exam_id}/questions", response_model=BaseResponse)
+async def get_exam_questions(
+    exam_id: int,
+    session: AsyncSession = Depends(get_session),
+    current_user: dict = Depends(get_current_user),
+) -> BaseResponse:
+    """获取考试题目列表及 OCR 结果."""
+    exam = await ExamRepository(session).get_by_id(exam_id)
+    if not exam:
+        raise NotFoundException("考试不存在")
+
+    questions = await ExamQuestionRepository(session).get_by_exam_ordered(exam_id)
+    return BaseResponse(
+        data={
+            "exam_id": exam_id,
+            "questions": [
+                {
+                    "id": q.id,
+                    "sequence_number": q.sequence_number,
+                    "question_type": q.question_type.value if hasattr(q.question_type, "value") else str(q.question_type),
+                    "content": q.content,
+                    "content_latex": q.content_latex,
+                    "options": q.options,
+                    "score": float(q.score) if q.score is not None else 0.0,
+                    "answer_area": q.answer_area,
+                    "ocr_confidence": q.ocr_confidence,
+                    "status": q.status.value if hasattr(q.status, "value") else str(q.status),
+                }
+                for q in questions
+            ],
+        },
+    )
+
+
+@router.get("/{exam_id}/submissions", response_model=BaseResponse)
+async def get_exam_submissions(
+    exam_id: int,
+    session: AsyncSession = Depends(get_session),
+    current_user: dict = Depends(get_current_user),
+) -> BaseResponse:
+    """获取所有学生作答，按学生分组."""
+    exam = await ExamRepository(session).get_by_id(exam_id)
+    if not exam:
+        raise NotFoundException("考试不存在")
+
+    stmt = select(Submission).where(Submission.exam_id == exam_id)
+    result = await session.exec(stmt)
+    submissions = list(result.all())
+
+    grouped: dict[int, list[dict]] = defaultdict(list)
+    for sub in submissions:
+        grouped[sub.student_id].append(
+            {
+                "id": sub.id,
+                "exam_question_id": sub.exam_question_id,
+                "answer_text": sub.answer_text,
+                "answer_latex": sub.answer_latex,
+                "answer_image_urls": sub.answer_image_urls,
+                "submitted_at": sub.submitted_at,
+                "grading_status": sub.grading_status.value if hasattr(sub.grading_status, "value") else str(sub.grading_status),
+            }
+        )
+
+    return BaseResponse(
+        data={
+            "exam_id": exam_id,
+            "groups": [
+                {"student_id": sid, "submissions": items}
+                for sid, items in grouped.items()
+            ],
+        },
+    )
+
+
+@router.get("/{exam_id}/results", response_model=BaseResponse)
+async def get_exam_results(
+    exam_id: int,
+    session: AsyncSession = Depends(get_session),
+    current_user: dict = Depends(get_current_user),
+) -> BaseResponse:
+    """获取判卷结果及分数分布统计."""
+    exam = await ExamRepository(session).get_by_id(exam_id)
+    if not exam:
+        raise NotFoundException("考试不存在")
+
+    grading_results = await GradingResultRepository(session).get_by_exam(exam_id)
+    scores = [float(gr.score) for gr in grading_results]
+    max_scores = [float(gr.max_score) for gr in grading_results]
+
+    total_score = sum(scores)
+    total_max = sum(max_scores)
+
+    # 按分数段统计（以百分比计）
+    percentages = [s / m * 100 if m > 0 else 0 for s, m in zip(scores, max_scores)]
+    distribution = {
+        "0-59": len([p for p in percentages if p < 60]),
+        "60-69": len([p for p in percentages if 60 <= p < 70]),
+        "70-79": len([p for p in percentages if 70 <= p < 80]),
+        "80-89": len([p for p in percentages if 80 <= p < 90]),
+        "90-100": len([p for p in percentages if p >= 90]),
     }
 
+    error_stats = await GradingResultRepository(session).get_error_stats(exam_id)
+    error_types: dict[str, int] = defaultdict(int)
+    for gr in error_stats:
+        et = gr.error_type.value if hasattr(gr.error_type, "value") else str(gr.error_type)
+        error_types[et] += 1
 
-@router.post("/{exam_id}/ocr")
-async def ocr_exam(
+    return BaseResponse(
+        data={
+            "exam_id": exam_id,
+            "total_score": round(total_score, 2),
+            "max_score": round(total_max, 2),
+            "score_rate": round(total_score / total_max, 4) if total_max > 0 else 0,
+            "question_count": len(grading_results),
+            "distribution": distribution,
+            "error_types": dict(error_types),
+            "results": [
+                {
+                    "submission_id": gr.submission_id,
+                    "score": float(gr.score),
+                    "max_score": float(gr.max_score),
+                    "is_correct": gr.is_correct,
+                    "error_type": gr.error_type.value if hasattr(gr.error_type, "value") else str(gr.error_type),
+                    "confidence": float(gr.confidence) if gr.confidence is not None else None,
+                }
+                for gr in grading_results
+            ],
+        },
+    )
+
+
+@router.get("/{exam_id}/results/export")
+async def export_exam_results_pdf(
     exam_id: int,
-    provider: str | None = None,
-) -> Any:
-    """
-    对试卷进行 OCR 识别和版面分析
-
-    - provider: 可选 qwen-vl / gpt-4o / mathpix，不指定则自动选择
-    """
-    from app.ai.ocr_engine import ocr_engine
-
-    exam = _exams.get(exam_id)
+    session: AsyncSession = Depends(get_session),
+    current_user: dict = Depends(get_current_user),
+) -> Response:
+    """导出考试成绩单 PDF（教师用）."""
+    exam = await ExamRepository(session).get_by_id(exam_id)
     if not exam:
-        raise BadRequestException("考试不存在") from None
+        raise NotFoundException("考试不存在")
 
-    if exam["status"] not in ("uploaded", "ocr_failed"):
-        raise BadRequestException(f"当前状态 {exam['status']} 不支持 OCR")
+    grading_results = await GradingResultRepository(session).get_by_exam(exam_id)
 
-    exam["status"] = "processing"
-    all_questions: list[ParsedQuestion] = []
-    ocr_warnings = []
-
-    for page in exam["pages"]:
-        page_num = page["page_number"]
-        object_name = page["object_name"]
-
-        # 从 MinIO 读取图片
-        img_bytes = storage_service.get_file_bytes(object_name)
-
-        # OCR 识别
-        try:
-            ocr_result = await ocr_engine.analyze_exam_page(
-                image_bytes=img_bytes,
-                subject_hint=exam["subject"],
-                preferred_provider=provider,
-            )
-
-            if not ocr_result["success"]:
-                ocr_warnings.append(f"第 {page_num} 页识别失败")
-                continue
-
-            # 版面分析
-            parsed = layout_parser.parse_ocr_result(
-                ocr_data=ocr_result["data"],
-                page_number=page_num,
-            )
-
-            # 验证题目质量
-            valid, warnings = layout_parser.validate_questions(parsed)
-            ocr_warnings.extend([f"第 {page_num} 页: {w['issues']}" for w in warnings])
-
-            all_questions.extend(valid)
-            page["ocr_provider"] = ocr_result["provider"]
-            page["fallback_used"] = ocr_result.get("fallback_used", False)
-
-        except Exception as e:
-            ocr_warnings.append(f"第 {page_num} 页处理异常: {str(e)}")
+    # 按学生聚合分数
+    student_scores: dict[int, dict] = {}
+    for gr in grading_results:
+        sub = await session.get(Submission, gr.submission_id)
+        if not sub:
             continue
+        sid = sub.student_id
+        if sid not in student_scores:
+            student = await StudentRepository(session).get_by_id(sid)
+            user = await session.get(User, student.user_id) if student else None
+            student_scores[sid] = {
+                "student_id": sid,
+                "student_number": student.student_number if student else "",
+                "student_name": user.real_name if user else "",
+                "objective_score": 0.0,
+                "subjective_score": 0.0,
+                "total_score": 0.0,
+            }
+        # 简单区分：客观题（选择题）与主观题
+        eq = await session.get(ExamQuestion, sub.exam_question_id)
+        score = float(gr.score) if gr.score else 0.0
+        if eq and eq.question_type.value == "choice":
+            student_scores[sid]["objective_score"] += score
+        else:
+            student_scores[sid]["subjective_score"] += score
+        student_scores[sid]["total_score"] += score
 
-    # 合并多页题目，重新排序
-    if len(exam["pages"]) > 1:
-        all_questions = layout_parser.merge_multi_page_questions(
-            [[q for q in all_questions if q.page_number == p["page_number"]] for p in exam["pages"]]
-        )
-
-    # 保存题目
-    _exam_questions[exam_id] = all_questions
-    exam["questions"] = [q.to_dict() for q in all_questions]
-    exam["status"] = "ocr_completed" if all_questions else "ocr_failed"
-    exam["ocr_warnings"] = ocr_warnings
-
-    return {
-        "success": len(all_questions) > 0,
-        "exam_id": exam_id,
-        "question_count": len(all_questions),
-        "status": exam["status"],
-        "questions": exam["questions"],
-        "warnings": ocr_warnings,
-    }
-
-
-@router.post("/{exam_id}/answer-key")
-async def upload_answer_key(
-    exam_id: int,
-    file: UploadFile = File(...),
-) -> Any:
-    """上传标准答案（PDF 或文本文件）"""
-    exam = _exams.get(exam_id)
-    if not exam:
-        raise BadRequestException("考试不存在") from None
-
-    contents = await file.read()
-
-    # 如果是 PDF，提取文本
-    if file.filename and file.filename.lower().endswith(".pdf"):
-        text = pdf_service.extract_text_from_pdf(contents)
-    else:
-        text = contents.decode("utf-8", errors="ignore")
-
-    # 解析答案映射
-    answers = layout_parser.extract_answer_key_from_text(text)
-
-    # 保存到考试记录
-    exam["answer_key"] = answers
-    exam["answer_key_raw"] = text
-
-    return {
-        "success": True,
-        "exam_id": exam_id,
-        "answers_parsed": answers,
-        "answer_count": len(answers),
-    }
-
-
-@router.post("/{exam_id}/grade")
-async def grade_exam(
-    exam_id: int,
-    student_id: int = Form(1),
-    answers: str | None = Form(None),
-) -> Any:
-    """
-    对考试进行判卷
-
-    - answers: JSON 字符串，格式 {"1": "A", "2": "x=2"}
-      如果不提供，则使用已上传的答题卡图片（待实现）
-    """
-    import json
-
-    exam = _exams.get(exam_id)
-    if not exam:
-        raise BadRequestException("考试不存在") from None
-
-    questions = _exam_questions.get(exam_id, [])
-    if not questions:
-        raise BadRequestException("请先完成 OCR 识别") from None
-
-    answer_key = exam.get("answer_key", {})
-    if not answer_key:
-        raise BadRequestException("请先上传标准答案") from None
-
-    # 解析学生答案
-    student_answers = {}
-    if answers:
-        try:
-            student_answers = json.loads(answers)
-        except Exception:
-            raise BadRequestException("answers 参数格式错误，应为 JSON 字符串")
-
-    # 逐题判卷
-    results = []
-    knowledge_updates = []
-    total_score = 0.0
-    max_total = 0.0
-
-    for q in questions:
-        seq = q.sequence
-        std_ans = answer_key.get(seq, "")
-        stu_ans = student_answers.get(str(seq), "")
-
-        # 判卷
-        grading_result = await grading_engine.grade(
-            question_type=q.question_type,
-            question_content=q.content,
-            standard_answer=std_ans,
-            student_answer=stu_ans,
-            max_score=q.score,
-        )
-
-        results.append({
-            "sequence": seq,
-            "question_type": q.question_type,
-            "content": q.content,
-            "standard_answer": std_ans,
-            "student_answer": stu_ans,
-            "grading": grading_result.to_dict(),
-        })
-
-        total_score += grading_result.score
-        max_total += q.score
-
-        # 准备知识状态更新
-        for kp_id in grading_result.knowledge_point_ids:
-            if isinstance(kp_id, int):
-                knowledge_updates.append({
-                    "knowledge_point_id": kp_id,
-                    "is_correct": grading_result.is_correct,
-                    "error_type": grading_result.error_type,
-                    "question_difficulty": 3.0,  # 默认难度
-                })
-
-    # 批量更新知识状态
-    updated_states = []
-    if knowledge_updates:
-        updated_states = knowledge_tracker.batch_update(
-            student_id=student_id,
-            results=knowledge_updates,
-        )
-
-    exam["status"] = "graded"
-    exam["last_grading"] = {
-        "student_id": student_id,
-        "total_score": total_score,
-        "max_score": max_total,
-        "score_rate": round(total_score / max_total, 4) if max_total > 0 else 0,
-        "results": results,
-    }
-
-    return {
-        "success": True,
-        "exam_id": exam_id,
-        "student_id": student_id,
-        "total_score": round(total_score, 2),
-        "max_score": max_total,
-        "score_rate": round(total_score / max_total, 4) if max_total > 0 else 0,
-        "question_results": results,
-        "knowledge_updates": [s.to_dict() for s in updated_states],
-    }
-
-
-@router.get("/{exam_id}")
-async def get_exam(exam_id: int) -> Any:
-    """获取考试详情"""
-    exam = _exams.get(exam_id)
-    if not exam:
-        raise BadRequestException("考试不存在") from None
-    return exam
-
-
-@router.get("/{exam_id}/questions")
-async def get_exam_questions(exam_id: int) -> Any:
-    """获取考试题目列表"""
-    exam = _exams.get(exam_id)
-    if not exam:
-        raise BadRequestException("考试不存在") from None
-    return {
-        "exam_id": exam_id,
-        "questions": exam.get("questions", []),
-    }
+    results = list(student_scores.values())
+    pdf_bytes = await PDFExporter().export_exam_results(exam_id, results)
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f"attachment; filename=exam_results_{exam_id}.pdf"
+        },
+    )

@@ -1,0 +1,107 @@
+[
+  {
+    "knowledge_point": "公民权利与义务的统一",
+    "mastery_level": 1.0,
+    "confidence": 0.6,
+    "suggested_difficulty": "hard",
+    "priority_review": false
+  },
+  {
+    "knowledge_point": "依法行使权利",
+    "mastery_level": 1.0,
+    "confidence": 0.6,
+    "suggested_difficulty": "hard",
+    "priority_review": false
+  },
+  {
+    "knowledge_point": "不得损害他人合法权益",
+    "mastery_level": 1.0,
+    "confidence": 0.6,
+    "suggested_difficulty": "hard",
+    "priority_review": false
+  },
+  {
+    "knowledge_point": "尊重他人权利",
+    "mastery_level": 0.75,
+    "confidence": 0.6,
+    "suggested_difficulty": "medium",
+    "priority_review": true
+  },
+  {
+    "knowledge_point": "社会公德",
+    "mastery_level": 0.75,
+    "confidence": 0.6,
+    "suggested_difficulty": "medium",
+    "priority_review": true
+  },
+  {
+    "knowledge_point": "宪法的最高法律地位",
+    "mastery_level": 1.0,
+    "confidence": 0.6,
+    "suggested_difficulty": "hard",
+    "priority_review": false
+  },
+  {
+    "knowledge_point": "宪法是国家的根本法",
+    "mastery_level": 1.0,
+    "confidence": 0.6,
+    "suggested_difficulty": "hard",
+    "priority_review": false
+  },
+  {
+    "knowledge_point": "党的领导、人民当家作主、依法治国统一",
+    "mastery_level": 0.5,
+    "confidence": 0.6,
+    "suggested_difficulty": "easy",
+    "priority_review": true
+  },
+  {
+    "knowledge_point": "全国人大的立法权",
+    "mastery_level": 0.5,
+    "confidence": 0.6,
+    "suggested_difficulty": "easy",
+    "priority_review": true
+  },
+  {
+    "knowledge_point": "非公有制经济",
+    "mastery_level": 0.625,
+    "confidence": 0.8,
+    "suggested_difficulty": "medium",
+    "priority_review": true
+  },
+  {
+    "knowledge_point": "民族区域自治制度",
+    "mastery_level": 0.5,
+    "confidence": 0.6,
+    "suggested_difficulty": "easy",
+    "priority_review": true
+  },
+  {
+    "knowledge_point": "基层群众自治",
+    "mastery_level": 0.5,
+    "confidence": 0.6,
+    "suggested_difficulty": "easy",
+    "priority_review": true
+  },
+  {
+    "knowledge_point": "保护文化遗产",
+    "mastery_level": 1.0,
+    "confidence": 0.6,
+    "suggested_difficulty": "hard",
+    "priority_review": false
+  },
+  {
+    "knowledge_point": "公民义务",
+    "mastery_level": 1.0,
+    "confidence": 0.6,
+    "suggested_difficulty": "hard",
+    "priority_review": false
+  },
+  {
+    "knowledge_point": "传承传统文化",
+    "mastery_level": 1.0,
+    "confidence": 0.6,
+    "suggested_difficulty": "hard",
+    "priority_review": false
+  }
+]
