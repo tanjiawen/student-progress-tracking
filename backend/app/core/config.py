@@ -1,0 +1,53 @@
+from typing import List, Optional
+
+from pydantic_settings import BaseSettings
+
+
+class Settings(BaseSettings):
+    # App
+    APP_NAME: str = "Student Progress Tracking"
+    APP_ENV: str = "development"
+    DEBUG: bool = True
+    SECRET_KEY: str = "change-me-in-production"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+
+    # Database
+    DATABASE_URL: str = "postgresql+asyncpg://student:password@localhost:5432/progress_tracking"
+    DATABASE_URL_SYNC: str = "postgresql://student:password@localhost:5432/progress_tracking"
+
+    # Redis
+    REDIS_URL: str = "redis://localhost:6379/0"
+
+    # Qdrant
+    QDRANT_URL: str = "http://localhost:6333"
+    QDRANT_API_KEY: Optional[str] = None
+
+    # MinIO
+    MINIO_ENDPOINT: str = "localhost:9000"
+    MINIO_ACCESS_KEY: str = "minioadmin"
+    MINIO_SECRET_KEY: str = "minioadmin"
+    MINIO_BUCKET_NAME: str = "student-progress"
+    MINIO_SECURE: bool = False
+
+    # AI
+    DEEPSEEK_API_KEY: Optional[str] = None
+    DEEPSEEK_BASE_URL: str = "https://api.deepseek.com"
+    OPENAI_API_KEY: Optional[str] = None
+    MATHPIX_APP_ID: Optional[str] = None
+    MATHPIX_API_KEY: Optional[str] = None
+
+    # Embedding
+    EMBEDDING_MODEL: str = "text-embedding-3-small"
+    EMBEDDING_DIMENSION: int = 1536
+
+    # Celery
+    CELERY_BROKER_URL: str = "redis://localhost:6379/1"
+    CELERY_RESULT_BACKEND: str = "redis://localhost:6379/2"
+
+    class Config:
+        env_file = ".env"
+        case_sensitive = True
+
+
+settings = Settings()
