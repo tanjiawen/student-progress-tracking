@@ -24,8 +24,9 @@ IMAGE_PATH = PROJECT_ROOT / "test" / "20260507-155657.png"
 OCR_JSON_PATH = PROJECT_ROOT / "test" / "answer_card_ocr_result.json"
 
 # API Keys
-DEEPSEEK_API_KEY = "sk-864d13feccf24173ade545c99934872b"
-DASHSCOPE_API_KEY = "sk-3621b7e7886e4bc1a6aa09e0a094c576"
+import os
+DEEPSEEK_API_KEY = os.environ.get("TEST_DEEPSEEK_API_KEY", "sk-test-fake-key-do-not-use-in-production")
+DASHSCOPE_API_KEY = os.environ.get("TEST_DASHSCOPE_API_KEY", "sk-test-fake-key-do-not-use-in-production")
 
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 DASHSCOPE_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"

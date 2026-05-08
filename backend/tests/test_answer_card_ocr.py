@@ -16,7 +16,8 @@ from pathlib import Path
 import httpx
 
 # DeepSeek API 配置
-API_KEY = "sk-864d13feccf24173ade545c99934872b"
+import os
+API_KEY = os.environ.get("TEST_API_KEY", "sk-test-fake-key-do-not-use-in-production")
 BASE_URL = "https://api.deepseek.com"
 
 # 文件路径

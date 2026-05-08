@@ -1,12 +1,11 @@
 """文本 Embedding 服务."""
 
 import os
-import warnings
 
 import httpx
-import numpy as np
 
 from app.core.config import settings
+from app.core.exceptions import ConfigurationError
 from app.models.question_template import QuestionTemplate
 
 
@@ -46,11 +45,9 @@ class EmbeddingService:
             1536 维浮点向量
         """
         if not self.api_key:
-            warnings.warn(
-                "OPENAI_API_KEY 未设置，使用随机向量作为 fallback（仅测试用途）",
-                stacklevel=2,
+            raise ConfigurationError(
+                "OPENAI_API_KEY 未设置，无法提供 Embedding 服务"
             )
-            return self._random_vector()
 
         response = await self.client.post(
             "/embeddings",
@@ -73,11 +70,9 @@ class EmbeddingService:
             return []
 
         if not self.api_key:
-            warnings.warn(
-                "OPENAI_API_KEY 未设置，使用随机向量作为 fallback（仅测试用途）",
-                stacklevel=2,
+            raise ConfigurationError(
+                "OPENAI_API_KEY 未设置，无法提供 Embedding 服务"
             )
-            return [self._random_vector() for _ in texts]
 
         response = await self.client.post(
             "/embeddings",
@@ -107,12 +102,6 @@ class EmbeddingService:
 
         text = " | ".join(parts)
         return await self.embed_text(text)
-
-    def _random_vector(self) -> list[float]:
-        """生成归一化的随机测试向量."""
-        vec = np.random.randn(self.dimension).astype(np.float32)
-        vec /= np.linalg.norm(vec)
-        return vec.tolist()
 
     async def close(self) -> None:
         """关闭 HTTP 客户端."""

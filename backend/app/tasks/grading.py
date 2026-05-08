@@ -1,10 +1,10 @@
-import asyncio
 import logging
 from typing import Any
 
+from asgiref.sync import async_to_sync
 from celery_worker import celery_app
 
-from app.core.websocket_manager import manager
+from app.core.event_publisher import publish_notification
 from app.db import SessionLocal
 from app.models.exam import Exam, ExamStatus
 from app.models.exam_question import ExamQuestion
@@ -15,10 +15,6 @@ from app.models.submission import GradingStatus, Submission
 from app.services.grading_engine import grading_engine
 
 logger = logging.getLogger(__name__)
-
-
-def _run_async(coro):
-    return asyncio.run(coro)
 
 
 _ERROR_TYPE_MAP = {
@@ -36,13 +32,8 @@ _ERROR_TYPE_MAP = {
 }
 
 
-@celery_app.task(
-    bind=True,
-    autoretry_for=(Exception,),
-    retry_kwargs={"max_retries": 3, "countdown": 60},
-)
-def grade_submission(self, submission_id: int) -> dict[str, Any]:
-    """单题判卷任务."""
+async def _grade_submission_async(submission_id: int) -> dict[str, Any]:
+    """单题判卷异步逻辑."""
     logger.info("Start grading submission_id=%s", submission_id)
     db = SessionLocal()
     submission: Submission | None = None
@@ -71,19 +62,17 @@ def grade_submission(self, submission_id: int) -> dict[str, Any]:
         std_ans = question_template.standard_answer if question_template else ""
         max_score = exam_question.score
 
-        grading_result = _run_async(
-            grading_engine.grade(
-                question_type=exam_question.question_type.value,
-                question_content=exam_question.content,
-                standard_answer=std_ans,
-                student_answer=submission.answer_text or "",
-                max_score=max_score,
-                knowledge_point_hints=(
-                    question_template.knowledge_point_ids
-                    if question_template
-                    else None
-                ),
-            )
+        grading_result = await grading_engine.grade(
+            question_type=exam_question.question_type.value,
+            question_content=exam_question.content,
+            standard_answer=std_ans,
+            student_answer=submission.answer_text or "",
+            max_score=max_score,
+            knowledge_point_hints=(
+                question_template.knowledge_point_ids
+                if question_template
+                else None
+            ),
         )
 
         gr = GradingResult(
@@ -107,23 +96,19 @@ def grade_submission(self, submission_id: int) -> dict[str, Any]:
         db.add(submission)
         db.commit()
 
-        # 推送 WebSocket 通知给学生
+        # 推送 WebSocket 通知给学生 (Security fix A-003: decoupled via Redis)
         student = db.get(Student, submission.student_id)
         if student and student.user_id:
-            asyncio.run(
-                manager.send_to_user(
-                    str(student.user_id),
-                    manager.build_message(
-                        "exam.graded",
-                        {
-                            "submission_id": submission_id,
-                            "exam_id": submission.exam_id,
-                            "score": grading_result.score,
-                            "max_score": max_score,
-                            "is_correct": grading_result.is_correct,
-                        },
-                    ),
-                )
+            await publish_notification(
+                str(student.user_id),
+                "exam.graded",
+                {
+                    "submission_id": submission_id,
+                    "exam_id": submission.exam_id,
+                    "score": grading_result.score,
+                    "max_score": max_score,
+                    "is_correct": grading_result.is_correct,
+                },
             )
 
         logger.info(
@@ -140,13 +125,13 @@ def grade_submission(self, submission_id: int) -> dict[str, Any]:
             "is_correct": grading_result.is_correct,
         }
 
-    except Exception as exc:
+    except Exception:
         logger.exception("Grading failed for submission_id=%s", submission_id)
         if submission:
             submission.grading_status = GradingStatus.MANUAL_REVIEW
             db.add(submission)
             db.commit()
-        raise self.retry(exc=exc)
+        raise
 
     finally:
         db.close()
@@ -157,8 +142,16 @@ def grade_submission(self, submission_id: int) -> dict[str, Any]:
     autoretry_for=(Exception,),
     retry_kwargs={"max_retries": 3, "countdown": 60},
 )
-def batch_grade_exam(self, exam_id: int) -> dict[str, Any]:
-    """批量判卷任务."""
+def grade_submission(self, submission_id: int) -> dict[str, Any]:
+    """单题判卷任务入口."""
+    try:
+        return async_to_sync(_grade_submission_async)(submission_id)
+    except Exception as exc:
+        raise self.retry(exc=exc)
+
+
+async def _batch_grade_exam_async(self, exam_id: int) -> dict[str, Any]:
+    """批量判卷异步逻辑."""
     logger.info("Start batch grading for exam_id=%s", exam_id)
     db = SessionLocal()
     exam: Exam | None = None
@@ -191,20 +184,16 @@ def batch_grade_exam(self, exam_id: int) -> dict[str, Any]:
                     "submission_id": sub.id,
                 },
             )
-            asyncio.run(
-                manager.send_to_user(
-                    str(teacher_id),
-                    manager.build_message(
-                        "grading_progress",
-                        {
-                            "exam_id": exam_id,
-                            "progress": round((i + 1) / total * 100, 2),
-                            "stage": "dispatching",
-                            "current": i + 1,
-                            "total": total,
-                        },
-                    ),
-                )
+            await publish_notification(
+                str(teacher_id),
+                "grading_progress",
+                {
+                    "exam_id": exam_id,
+                    "progress": round((i + 1) / total * 100, 2),
+                    "stage": "dispatching",
+                    "current": i + 1,
+                    "total": total,
+                },
             )
             grade_submission.delay(sub.id)
 
@@ -212,20 +201,16 @@ def batch_grade_exam(self, exam_id: int) -> dict[str, Any]:
         db.add(exam)
         db.commit()
 
-        asyncio.run(
-            manager.send_to_user(
-                str(teacher_id),
-                manager.build_message(
-                    "grading_progress",
-                    {
-                        "exam_id": exam_id,
-                        "progress": 100.0,
-                        "stage": "completed",
-                        "dispatched_count": total,
-                        "status": "graded",
-                    },
-                ),
-            )
+        await publish_notification(
+            str(teacher_id),
+            "grading_progress",
+            {
+                "exam_id": exam_id,
+                "progress": 100.0,
+                "stage": "completed",
+                "dispatched_count": total,
+                "status": "graded",
+            },
         )
 
         logger.info(
@@ -240,9 +225,22 @@ def batch_grade_exam(self, exam_id: int) -> dict[str, Any]:
             "status": "graded",
         }
 
-    except Exception as exc:
+    except Exception:
         logger.exception("Batch grading failed for exam_id=%s", exam_id)
-        raise self.retry(exc=exc)
+        raise
 
     finally:
         db.close()
+
+
+@celery_app.task(
+    bind=True,
+    autoretry_for=(Exception,),
+    retry_kwargs={"max_retries": 3, "countdown": 60},
+)
+def batch_grade_exam(self, exam_id: int) -> dict[str, Any]:
+    """批量判卷任务入口."""
+    try:
+        return async_to_sync(_batch_grade_exam_async)(self, exam_id)
+    except Exception as exc:
+        raise self.retry(exc=exc)

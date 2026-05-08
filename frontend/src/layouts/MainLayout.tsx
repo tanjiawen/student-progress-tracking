@@ -29,7 +29,7 @@ const MainLayout: React.FC = () => {
 
   const studentMenuItems = [
     { key: '/', icon: <DashboardOutlined />, label: '学习概览' },
-    { key: '/students/1', icon: <IdcardOutlined />, label: '个人档案' },
+    { key: `/students/${user?.id ?? ''}`, icon: <IdcardOutlined />, label: '个人档案' },
     { key: '/exercise', icon: <EditOutlined />, label: '练习' },
     { key: '/error-book', icon: <BookOutlined />, label: '错题本' },
     { key: '/reports', icon: <BarChartOutlined />, label: '学情报告' },

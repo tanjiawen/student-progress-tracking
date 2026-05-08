@@ -1,20 +1,23 @@
 version: '3.8'
 
+# 安全提示：生产环境必须使用强密码，并通过 .env 文件或密钥管理服务注入。
+# 请勿将真实密码提交到版本控制。
+
 services:
   # PostgreSQL Database
   db:
     image: postgres:16-alpine
     container_name: spt-postgres
     environment:
-      POSTGRES_USER: student
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: progress_tracking
+      POSTGRES_USER: ${POSTGRES_USER:-student}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-progress_tracking}
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U student -d progress_tracking"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-student} -d ${POSTGRES_DB:-progress_tracking}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -48,8 +51,8 @@ services:
     image: minio/minio:latest
     container_name: spt-minio
     environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
     ports:
       - "9000:9000"
       - "9001:9001"
@@ -71,18 +74,18 @@ services:
     volumes:
       - ./backend:/app
     environment:
-      - DATABASE_URL=postgresql+asyncpg://student:password@db:5432/progress_tracking
-      - DATABASE_URL_SYNC=postgresql://student:password@db:5432/progress_tracking
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-student}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-progress_tracking}
+      - DATABASE_URL_SYNC=postgresql://${POSTGRES_USER:-student}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-progress_tracking}
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/1
       - CELERY_RESULT_BACKEND=redis://redis:6379/2
       - QDRANT_URL=http://qdrant:6333
       - MINIO_ENDPOINT=minio:9000
-      - MINIO_ACCESS_KEY=minioadmin
-      - MINIO_SECRET_KEY=minioadmin
+      - MINIO_ACCESS_KEY=${MINIO_ROOT_USER}
+      - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD}
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
       - DEEPSEEK_GATEWAY_URL=http://deepseek-gateway:8787
-      - DEBUG=true
+      - DEBUG=${DEBUG:-true}
     depends_on:
       db:
         condition: service_healthy
@@ -101,16 +104,16 @@ services:
     volumes:
       - ./backend:/app
     environment:
-      - DATABASE_URL=postgresql+asyncpg://student:password@db:5432/progress_tracking
-      - DATABASE_URL_SYNC=postgresql://student:password@db:5432/progress_tracking
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-student}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-progress_tracking}
+      - DATABASE_URL_SYNC=postgresql://${POSTGRES_USER:-student}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-progress_tracking}
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/1
       - CELERY_RESULT_BACKEND=redis://redis:6379/2
       - QDRANT_URL=http://qdrant:6333
       - MINIO_ENDPOINT=minio:9000
-      - MINIO_ACCESS_KEY=minioadmin
-      - MINIO_SECRET_KEY=minioadmin
-      - DEBUG=true
+      - MINIO_ACCESS_KEY=${MINIO_ROOT_USER}
+      - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD}
+      - DEBUG=${DEBUG:-true}
     depends_on:
       - db
       - redis

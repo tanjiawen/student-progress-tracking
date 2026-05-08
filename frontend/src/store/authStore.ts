@@ -24,7 +24,9 @@ export const useAuthStore = create<AuthStore>()(
 
       login: async (username: string, password: string) => {
         const res = await authApi.login({ username, password })
-        localStorage.setItem('token', res.access_token)
+        // Security fix V-017: token is stored in HttpOnly cookie by backend.
+        // We keep it in memory for Authorization header fallback (tests/mobile),
+        // but do NOT persist it to localStorage.
         set({
           user: res.user,
           token: res.access_token,
@@ -33,13 +35,11 @@ export const useAuthStore = create<AuthStore>()(
       },
 
       logout: () => {
-        localStorage.removeItem('token')
         set({ user: null, token: null, isAuthenticated: false })
       },
 
       refresh: async () => {
-        const token = get().token
-        if (!token) return
+        // Security fix V-017: rely on HttpOnly cookie, no need for local token
         try {
           const user = await authApi.me()
           set({ user, isAuthenticated: true })
@@ -52,7 +52,8 @@ export const useAuthStore = create<AuthStore>()(
     }),
     {
       name: 'auth-storage',
-      partialize: (state) => ({ token: state.token, user: state.user, isAuthenticated: state.isAuthenticated }),
+      // Security fix V-017: do NOT persist token to localStorage
+      partialize: (state) => ({ user: state.user, isAuthenticated: state.isAuthenticated }),
     }
   )
 )

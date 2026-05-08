@@ -124,7 +124,13 @@ async def test_upload_exam_image(
     test_class: Class,
 ) -> None:
     """Uploading an image exam file should work."""
-    img_bytes = b"\x89PNG\r\n\x1a\n fake png"
+    # Generate a valid 1x1 PNG for testing
+    from PIL import Image
+    import io as io_module
+    img = Image.new("RGB", (1, 1), color="red")
+    png_buf = io_module.BytesIO()
+    img.save(png_buf, format="PNG")
+    img_bytes = png_buf.getvalue()
     files = {"file": ("test_exam.png", io.BytesIO(img_bytes), "image/png")}
 
     with patch("app.api.v1.exams.storage_service.upload_image") as mock_upload:

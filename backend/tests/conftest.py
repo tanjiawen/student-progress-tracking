@@ -25,6 +25,9 @@ import tempfile
 from collections.abc import AsyncGenerator
 from unittest.mock import patch, MagicMock
 
+# Security fix V-001: ensure tests have a strong dummy SECRET_KEY
+os.environ.setdefault("SECRET_KEY", "test-secret-key-that-is-32-bytes-long!!")
+
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
@@ -95,7 +98,7 @@ async def auth_client(client: AsyncClient, test_user: User) -> AsyncClient:
     """Create an authenticated test client."""
     response = await client.post(
         "/api/v1/auth/login",
-        data={"username": "testuser", "password": "testpass123"},
+        json={"username": "testuser", "password": "testpass123"},
     )
     assert response.status_code == 200
     data = response.json()

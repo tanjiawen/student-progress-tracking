@@ -3,7 +3,12 @@
 实现 BKT（贝叶斯知识追踪）简化变体 + ELO 变体 + 时间衰减
 """
 
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
+
+from app.core.database import async_session
+from app.repositories.student_knowledge_state import StudentKnowledgeStateRepository
 
 
 class KnowledgeState:
@@ -62,6 +67,19 @@ class KnowledgeState:
         return "weak"
 
 
+def _run_async_task(coro):
+    """在线程池中运行异步协程，兼容已有事件循环的环境."""
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro)
+    future = _thread_pool.submit(asyncio.run, coro)
+    return future.result()
+
+
+_thread_pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix="knowledge_tracker")
+
+
 class KnowledgeTracker:
     """
     学科跟踪引擎
@@ -92,16 +110,45 @@ class KnowledgeTracker:
         self,
         student_id: int,
         knowledge_point_id: int,
+        session=None,
     ) -> KnowledgeState:
-        """获取学生某知识点的状态"""
+        """获取学生某知识点的状态."""
         key = (student_id, knowledge_point_id)
         if key not in self._states:
+            # 优先从数据库加载
+            if session is not None:
+                db_state = _run_async_task(
+                    self._load_state_from_db(student_id, knowledge_point_id)
+                )
+                if db_state is not None:
+                    self._states[key] = db_state
+                    return self._states[key]
             self._states[key] = KnowledgeState(
                 student_id=student_id,
                 knowledge_point_id=knowledge_point_id,
                 mastery_probability=self.P_L0,
             )
         return self._states[key]
+
+    async def _load_state_from_db(
+        self, student_id: int, knowledge_point_id: int
+    ) -> KnowledgeState | None:
+        """从数据库加载知识状态."""
+        async with async_session() as session:
+            repo = StudentKnowledgeStateRepository(session)
+            db_state = await repo.get_by_student_and_kp(student_id, knowledge_point_id)
+            if db_state:
+                return KnowledgeState(
+                    student_id=db_state.student_id,
+                    knowledge_point_id=db_state.knowledge_point_id,
+                    mastery_probability=float(db_state.mastery_probability),
+                    total_attempts=db_state.total_attempts,
+                    correct_count=db_state.correct_count,
+                    consecutive_correct=db_state.consecutive_correct,
+                    last_error_type=db_state.last_error_type,
+                    last_graded_at=db_state.last_graded_at,
+                )
+            return None
 
     def update_from_grading(
         self,
@@ -132,11 +179,19 @@ class KnowledgeTracker:
         if is_correct:
             # P(L|Correct) = P(Correct|L) * P(L) / P(Correct)
             p_correct = p_l * (1 - self.P_S) + (1 - p_l) * self.P_G
-            p_l_new = (p_l * (1 - self.P_S)) / p_correct if p_correct > 0 else p_l
+            if p_correct > 0:
+                p_l_new = (p_l * (1 - self.P_S)) / p_correct
+            else:
+                # 分母为0时保持原概率不变，避免ZeroDivisionError
+                p_l_new = p_l
         else:
             # P(L|Incorrect) = P(Incorrect|L) * P(L) / P(Incorrect)
             p_incorrect = p_l * self.P_S + (1 - p_l) * (1 - self.P_G)
-            p_l_new = (p_l * self.P_S) / p_incorrect if p_incorrect > 0 else p_l
+            if p_incorrect > 0:
+                p_l_new = (p_l * self.P_S) / p_incorrect
+            else:
+                # 分母为0时保持原概率不变，避免ZeroDivisionError
+                p_l_new = p_l
 
         # 2. 学习转移（答对后额外提升）
         if is_correct:
@@ -288,11 +343,15 @@ class KnowledgeTracker:
             is_correct = record["is_correct"]
             if is_correct:
                 p_correct = current_p * (1 - self.P_S) + (1 - current_p) * self.P_G
-                current_p = (current_p * (1 - self.P_S)) / p_correct if p_correct > 0 else current_p
+                if p_correct > 0:
+                    current_p = (current_p * (1 - self.P_S)) / p_correct
+                # 分母为0时保持current_p不变，避免ZeroDivisionError
                 current_p = current_p + (1 - current_p) * self.P_T
             else:
                 p_incorrect = current_p * self.P_S + (1 - current_p) * (1 - self.P_G)
-                current_p = (current_p * self.P_S) / p_incorrect if p_incorrect > 0 else current_p
+                if p_incorrect > 0:
+                    current_p = (current_p * self.P_S) / p_incorrect
+                # 分母为0时保持current_p不变，避免ZeroDivisionError
 
             current_p = max(0.0, min(1.0, current_p))
             trend.append({

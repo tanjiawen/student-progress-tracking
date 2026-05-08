@@ -5,13 +5,20 @@ AI 服务 API 路由
 
 from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 from app.ai.deepseek_client import deepseek_gateway
+from app.core.dependencies import get_current_user, require_role
 from app.core.exceptions import BadRequestException
+from app.core.security import validate_url_for_ssrf
+from app.models.user import UserRole
 
-router = APIRouter()
+# Security fix V-003: all AI endpoints now require authentication
+router = APIRouter(dependencies=[Depends(get_current_user)])
+
+# Security fix V-003: allowed tool whitelist for /tool endpoint
+ALLOWED_TOOLS = {"calculator", "search", "fetch_url"}
 
 
 class ChatRequest(BaseModel):
@@ -81,6 +88,8 @@ async def web_search(request: SearchRequest) -> Any:
 @router.post("/fetch-url")
 async def fetch_url(url: str, format: str = "text") -> Any:
     """获取网页内容"""
+    # Security fix V-007: SSRF protection
+    validate_url_for_ssrf(url)
     try:
         content = await deepseek_gateway.fetch_url(url, format)
         return {"url": url, "content": content, "format": format}
@@ -89,8 +98,16 @@ async def fetch_url(url: str, format: str = "text") -> Any:
 
 
 @router.post("/tool")
-async def execute_tool(request: ToolExecuteRequest) -> Any:
-    """执行工具"""
+async def execute_tool(
+    request: ToolExecuteRequest,
+    current_user=Depends(require_role(UserRole.admin)),  # Security fix V-003: admin only
+) -> Any:
+    """执行工具（管理员专用）"""
+    # Security fix V-003: enforce tool whitelist
+    if request.tool_name not in ALLOWED_TOOLS:
+        raise BadRequestException(
+            f"工具 '{request.tool_name}' 不在允许列表中"
+        )
     try:
         result = await deepseek_gateway.execute_tool(
             tool_name=request.tool_name,

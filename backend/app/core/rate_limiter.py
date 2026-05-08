@@ -7,10 +7,13 @@ import time
 from fastapi import Depends, Request
 
 from app.core.config import settings
-from app.core.dependencies import get_current_user
+from app.core.dependencies import get_current_user_optional
 from app.core.exceptions import RateLimitException
 from app.core.redis_client import redis_client
 from app.schemas.user import UserRead
+
+# In-memory fallback for Redis without Lua script support (e.g. fakeredis)
+_memory_buckets: dict[str, tuple[float, float]] = {}
 
 # Lua 脚本实现原子性令牌桶
 TOKEN_BUCKET_LUA = """
@@ -64,11 +67,28 @@ class RateLimiter:
             burst: 桶容量（最大突发请求数）
         """
         now = time.time()
-        sha = await self._get_lua_sha()
-        result = await self.redis.evalsha(
-            sha, 1, key, str(rate), str(burst), str(now)
-        )
-        return bool(result)
+        try:
+            sha = await self._get_lua_sha()
+            result = await self.redis.evalsha(
+                sha, 1, key, str(rate), str(burst), str(now)
+            )
+            return bool(result)
+        except Exception:
+            # Fallback for Redis without Lua support (e.g. fakeredis)
+            return self._is_allowed_memory(key, rate, burst, now)
+
+    def _is_allowed_memory(self, key: str, rate: float, burst: int, now: float) -> bool:
+        """纯内存令牌桶回退实现."""
+        global _memory_buckets
+        tokens, last_time = _memory_buckets.get(key, (burst, now))
+        delta = max(0, now - last_time)
+        tokens = min(burst, tokens + delta * rate)
+        if tokens >= 1:
+            tokens -= 1
+            _memory_buckets[key] = (tokens, now)
+            return True
+        _memory_buckets[key] = (tokens, now)
+        return False
 
     async def limit_by_user(self, user_id: int, tier: str = "default") -> bool:
         """根据用户等级设置不同限流策略.
@@ -95,7 +115,7 @@ class RateLimiter:
 
 async def rate_limit_dependency(
     request: Request,
-    current_user: UserRead | None = Depends(get_current_user),
+    current_user: UserRead | None = Depends(get_current_user_optional),
 ) -> None:
     """FastAPI dependency：为路由提供限流保护.
 

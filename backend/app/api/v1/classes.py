@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Form, status
+from sqlalchemy.orm import selectinload
 from sqlmodel import func, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -89,19 +90,23 @@ async def get_class(
     if not class_obj:
         raise NotFoundException("班级不存在")
 
-    students = await StudentRepository(session).get_by_class(class_id)
-    student_items = []
-    for student in students:
-        user = await session.get(User, student.user_id)
-        student_items.append(
-            {
-                "id": student.id,
-                "user_id": student.user_id,
-                "student_number": student.student_number,
-                "user_name": user.real_name if user else None,
-                "enrollment_year": student.enrollment_year,
-            }
-        )
+    stmt = (
+        select(Student)
+        .options(selectinload(Student.user))
+        .where(Student.class_id == class_id)
+    )
+    result = await session.exec(stmt)
+    students = list(result.all())
+    student_items = [
+        {
+            "id": student.id,
+            "user_id": student.user_id,
+            "student_number": student.student_number,
+            "user_name": student.user.real_name if student.user else None,
+            "enrollment_year": student.enrollment_year,
+        }
+        for student in students
+    ]
 
     # 组装符合前端 ClassDetail 的响应
     return BaseResponse(

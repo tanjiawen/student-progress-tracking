@@ -1,11 +1,11 @@
-import asyncio
 import logging
 from typing import Any
 
+from asgiref.sync import async_to_sync
 from celery_worker import celery_app
 
 from app.ai.ocr_engine import ocr_engine
-from app.core.websocket_manager import manager
+from app.core.event_publisher import publish_notification
 from app.db import SessionLocal
 from app.models.exam import Exam, ExamStatus
 from app.models.exam_question import ExamQuestion, ExamQuestionStatus, QuestionType
@@ -18,10 +18,6 @@ from app.services.storage_service import storage_service
 logger = logging.getLogger(__name__)
 
 
-def _run_async(coro):
-    return asyncio.run(coro)
-
-
 _QUESTION_TYPE_MAP = {
     "choice": QuestionType.CHOICE,
     "fill_blank": QuestionType.FILL_BLANK,
@@ -31,13 +27,8 @@ _QUESTION_TYPE_MAP = {
 }
 
 
-@celery_app.task(
-    bind=True,
-    autoretry_for=(Exception,),
-    retry_kwargs={"max_retries": 3, "countdown": 60},
-)
-def process_exam_ocr(self, exam_id: int) -> dict[str, Any]:
-    """考试 OCR 处理任务."""
+async def _process_exam_ocr_async(self, exam_id: int) -> dict[str, Any]:
+    """考试 OCR 处理异步逻辑."""
     logger.info("Start OCR for exam_id=%s", exam_id)
     db = SessionLocal()
     exam: Exam | None = None
@@ -78,20 +69,16 @@ def process_exam_ocr(self, exam_id: int) -> dict[str, Any]:
                 meta={"current": i + 1, "total": total, "stage": "downloading"},
             )
 
-            asyncio.run(
-                manager.send_to_user(
-                    str(teacher_id),
-                    manager.build_message(
-                        "ocr_progress",
-                        {
-                            "exam_id": exam_id,
-                            "progress": round((i + 1) / total * 100, 2),
-                            "stage": "downloading",
-                            "current": i + 1,
-                            "total": total,
-                        },
-                    ),
-                )
+            await publish_notification(
+                str(teacher_id),
+                "ocr_progress",
+                    {
+                        "exam_id": exam_id,
+                        "progress": round((i + 1) / total * 100, 2),
+                        "stage": "downloading",
+                        "current": i + 1,
+                        "total": total,
+                    },
             )
 
             img_bytes = storage_service.get_file_bytes(object_name)
@@ -101,27 +88,21 @@ def process_exam_ocr(self, exam_id: int) -> dict[str, Any]:
                 meta={"current": i + 1, "total": total, "stage": "ocr"},
             )
 
-            asyncio.run(
-                manager.send_to_user(
-                    str(teacher_id),
-                    manager.build_message(
-                        "ocr_progress",
-                        {
-                            "exam_id": exam_id,
-                            "progress": round((i + 1) / total * 100, 2),
-                            "stage": "ocr",
-                            "current": i + 1,
-                            "total": total,
-                        },
-                    ),
-                )
+            await publish_notification(
+                str(teacher_id),
+                "ocr_progress",
+                {
+                    "exam_id": exam_id,
+                    "progress": round((i + 1) / total * 100, 2),
+                    "stage": "ocr",
+                    "current": i + 1,
+                    "total": total,
+                },
             )
 
-            ocr_result = _run_async(
-                ocr_engine.analyze_exam_page(
-                    image_bytes=img_bytes,
-                    subject_hint=subject_hint,
-                )
+            ocr_result = await ocr_engine.analyze_exam_page(
+                image_bytes=img_bytes,
+                subject_hint=subject_hint,
             )
 
             if not ocr_result.get("success"):
@@ -157,20 +138,16 @@ def process_exam_ocr(self, exam_id: int) -> dict[str, Any]:
         db.add(exam)
         db.commit()
 
-        asyncio.run(
-            manager.send_to_user(
-                str(teacher_id),
-                manager.build_message(
-                    "ocr_progress",
-                    {
-                        "exam_id": exam_id,
-                        "progress": 100.0,
-                        "stage": "completed",
-                        "question_count": len(all_questions),
-                        "status": "ready",
-                    },
-                ),
-            )
+        await publish_notification(
+            str(teacher_id),
+            "ocr_progress",
+            {
+                "exam_id": exam_id,
+                "progress": 100.0,
+                "stage": "completed",
+                "question_count": len(all_questions),
+                "status": "ready",
+            },
         )
 
         logger.info(
@@ -185,13 +162,13 @@ def process_exam_ocr(self, exam_id: int) -> dict[str, Any]:
             "status": "ready",
         }
 
-    except Exception as exc:
+    except Exception:
         logger.exception("OCR failed for exam_id=%s", exam_id)
         if exam:
             exam.status = ExamStatus.DRAFT
             db.add(exam)
             db.commit()
-        raise self.retry(exc=exc)
+        raise
 
     finally:
         db.close()
@@ -202,8 +179,16 @@ def process_exam_ocr(self, exam_id: int) -> dict[str, Any]:
     autoretry_for=(Exception,),
     retry_kwargs={"max_retries": 3, "countdown": 60},
 )
-def process_answer_sheet_ocr(self, submission_id: int) -> dict[str, Any]:
-    """答题卡 OCR 任务."""
+def process_exam_ocr(self, exam_id: int) -> dict[str, Any]:
+    """考试 OCR 处理任务入口."""
+    try:
+        return async_to_sync(_process_exam_ocr_async)(self, exam_id)
+    except Exception as exc:
+        raise self.retry(exc=exc)
+
+
+async def _process_answer_sheet_ocr_async(self, submission_id: int) -> dict[str, Any]:
+    """答题卡 OCR 异步逻辑."""
     logger.info("Start answer sheet OCR for submission_id=%s", submission_id)
     db = SessionLocal()
     submission: Submission | None = None
@@ -227,18 +212,14 @@ def process_answer_sheet_ocr(self, submission_id: int) -> dict[str, Any]:
         )
 
         if student_user_id:
-            asyncio.run(
-                manager.send_to_user(
-                    str(student_user_id),
-                    manager.build_message(
-                        "answer_ocr_progress",
-                        {
-                            "submission_id": submission_id,
-                            "progress": 33.0,
-                            "stage": "downloading",
-                        },
-                    ),
-                )
+            await publish_notification(
+                str(student_user_id),
+                "answer_ocr_progress",
+                {
+                    "submission_id": submission_id,
+                    "progress": 33.0,
+                    "stage": "downloading",
+                },
             )
 
         # 取第一张图片进行识别
@@ -251,29 +232,23 @@ def process_answer_sheet_ocr(self, submission_id: int) -> dict[str, Any]:
         )
 
         if student_user_id:
-            asyncio.run(
-                manager.send_to_user(
-                    str(student_user_id),
-                    manager.build_message(
-                        "answer_ocr_progress",
-                        {
-                            "submission_id": submission_id,
-                            "progress": 66.0,
-                            "stage": "ocr",
-                        },
-                    ),
-                )
+            await publish_notification(
+                str(student_user_id),
+                "answer_ocr_progress",
+                {
+                    "submission_id": submission_id,
+                    "progress": 66.0,
+                    "stage": "ocr",
+                },
             )
 
         # 获取题目内容作为上下文
         exam_question = db.get(ExamQuestion, submission.exam_question_id)
         question_content = exam_question.content if exam_question else ""
 
-        ocr_result = _run_async(
-            ocr_engine.recognize_student_answer(
-                image_bytes=img_bytes,
-                question_content=question_content,
-            )
+        ocr_result = await ocr_engine.recognize_student_answer(
+            image_bytes=img_bytes,
+            question_content=question_content,
         )
 
         self.update_state(
@@ -287,18 +262,14 @@ def process_answer_sheet_ocr(self, submission_id: int) -> dict[str, Any]:
         db.commit()
 
         if student_user_id:
-            asyncio.run(
-                manager.send_to_user(
-                    str(student_user_id),
-                    manager.build_message(
-                        "answer_ocr_progress",
-                        {
-                            "submission_id": submission_id,
-                            "progress": 100.0,
-                            "stage": "completed",
-                        },
-                    ),
-                )
+            await publish_notification(
+                str(student_user_id),
+                "answer_ocr_progress",
+                {
+                    "submission_id": submission_id,
+                    "progress": 100.0,
+                    "stage": "completed",
+                },
             )
 
         logger.info(
@@ -311,11 +282,25 @@ def process_answer_sheet_ocr(self, submission_id: int) -> dict[str, Any]:
             "text": submission.answer_text,
         }
 
-    except Exception as exc:
+    except Exception:
         logger.exception(
             "Answer sheet OCR failed for submission_id=%s", submission_id
         )
-        raise self.retry(exc=exc)
+        raise
 
     finally:
         db.close()
+
+
+@celery_app.task(
+    bind=True,
+    autoretry_for=(Exception,),
+    retry_kwargs={"max_retries": 3, "countdown": 60},
+)
+def process_answer_sheet_ocr(self, submission_id: int) -> dict[str, Any]:
+    """答题卡 OCR 任务入口."""
+    try:
+        return async_to_sync(_process_answer_sheet_ocr_async)(self, submission_id)
+    except Exception as exc:
+        raise self.retry(exc=exc)
+

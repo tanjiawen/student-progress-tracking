@@ -8,12 +8,14 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Query, Response, status
+from sqlalchemy.orm import selectinload
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.core.database import get_session
 from app.core.dependencies import get_current_user
-from app.core.exceptions import BadRequestException, NotFoundException
+from app.core.exceptions import BadRequestException, ForbiddenException, NotFoundException
+from app.schemas.user import UserRead
 from app.core.data_masking import DataMasker
 from app.models.class_ import Class
 from app.models.exam import Exam
@@ -42,6 +44,55 @@ from app.models.knowledge_point import KnowledgePoint
 router = APIRouter()
 
 
+async def _check_student_access(
+    student_id: int,
+    current_user: dict,
+    session: AsyncSession,
+) -> Student:
+    """Security fix V-012: resource-level authorization check.
+
+    - admin: can access any student
+    - teacher: can access students in classes they teach
+    - student/parent: can only access their own student record
+    """
+    student = await StudentRepository(session).get_by_id(student_id)
+    if not student:
+        raise NotFoundException("学生不存在")
+
+    role = current_user.role
+    user_id = current_user.id
+
+    if role == "admin":
+        return student
+
+    # For students: only allow access to their own record
+    if role == "student":
+        if student.user_id != user_id:
+            raise ForbiddenException("无权访问其他学生的数据")
+        return student
+
+    # For teachers: check if student is in a class taught by this teacher
+    if role == "teacher":
+        # Query if this teacher teaches the class this student belongs to
+        if student.class_id:
+            class_obj = await session.get(Class, student.class_id)
+            if class_obj and class_obj.teacher_id == user_id:
+                return student
+        # Also allow if the teacher is accessing their own profile (if they have one)
+        if student.user_id == user_id:
+            return student
+        raise ForbiddenException("无权访问该学生数据")
+
+    # For parents: only allow access to their own children
+    if role == "parent":
+        # TODO: implement parent-child relationship check
+        if student.user_id != user_id:
+            raise ForbiddenException("无权访问其他学生的数据")
+        return student
+
+    raise ForbiddenException("无权访问学生数据")
+
+
 def _student_to_dict(student: Student, user: User | None = None, class_name: str | None = None) -> dict:
     return {
         "id": student.id,
@@ -65,29 +116,35 @@ async def list_students(
     skip: int = 0,
     limit: int = 20,
     session: AsyncSession = Depends(get_session),
-    current_user: dict = Depends(get_current_user),
+    current_user: UserRead = Depends(get_current_user),
 ) -> BaseResponse:
     """获取学生列表，支持按班级和姓名筛选（返回数据已脱敏）."""
-    repo = StudentRepository(session)
+    # Security fix V-019: filter by name in SQL before pagination
+    from sqlalchemy import func
+
+    stmt = (
+        select(Student)
+        .options(selectinload(Student.user), selectinload(Student.class_))
+    )
     if class_id is not None:
-        students = await repo.get_by_class(class_id)
-    else:
-        students = await repo.get_all(skip=skip, limit=limit)
-
-    # 如果需要按姓名筛选，需要加载关联的 User
+        stmt = stmt.where(Student.class_id == class_id)
+    # Fix V-019: use database-level case-insensitive name filtering
     if name:
-        filtered = []
-        for student in students:
-            user = await session.get(User, student.user_id)
-            if user and user.real_name and name in user.real_name:
-                filtered.append(student)
-        students = filtered
+        stmt = stmt.join(User, Student.user_id == User.id).where(
+            func.lower(User.real_name).like(f"%{name.lower()}%")
+        )
+    stmt = stmt.offset(skip).limit(limit)
+    result = await session.exec(stmt)
+    students = list(result.all())
 
-    items = []
-    for student in students:
-        user = await session.get(User, student.user_id)
-        class_obj = await session.get(Class, student.class_id) if student.class_id else None
-        items.append(_student_to_dict(student, user=user, class_name=class_obj.name if class_obj else None))
+    items = [
+        _student_to_dict(
+            student,
+            user=student.user,
+            class_name=student.class_.name if student.class_ else None,
+        )
+        for student in students
+    ]
 
     # 对学生姓名进行脱敏
     masked_items = DataMasker.mask_student_name_in_response(items)
@@ -98,12 +155,10 @@ async def list_students(
 async def get_student(
     student_id: int,
     session: AsyncSession = Depends(get_session),
-    current_user: dict = Depends(get_current_user),
+    current_user: UserRead = Depends(get_current_user),
 ) -> BaseResponse:
     """获取学生详情（基本信息 + 班级 + 最近考试），姓名已脱敏."""
-    student = await StudentRepository(session).get_by_id(student_id)
-    if not student:
-        raise NotFoundException("学生不存在")
+    student = await _check_student_access(student_id, current_user, session)
 
     user = await session.get(User, student.user_id)
     class_obj = await session.get(Class, student.class_id) if student.class_id else None
@@ -139,12 +194,10 @@ async def get_student(
 async def get_knowledge_state(
     student_id: int,
     session: AsyncSession = Depends(get_session),
-    current_user: dict = Depends(get_current_user),
+    current_user: UserRead = Depends(get_current_user),
 ) -> BaseResponse:
     """获取学生知识状态，按学科分组返回掌握度列表."""
-    student = await StudentRepository(session).get_by_id(student_id)
-    if not student:
-        raise NotFoundException("学生不存在")
+    student = await _check_student_access(student_id, current_user, session)
 
     states = await StudentKnowledgeStateRepository(session).get_by_student(student_id)
 
@@ -183,12 +236,10 @@ async def get_knowledge_state(
 async def get_student_reports(
     student_id: int,
     session: AsyncSession = Depends(get_session),
-    current_user: dict = Depends(get_current_user),
+    current_user: UserRead = Depends(get_current_user),
 ) -> BaseResponse:
     """获取学生诊断报告列表."""
-    student = await StudentRepository(session).get_by_id(student_id)
-    if not student:
-        raise NotFoundException("学生不存在")
+    student = await _check_student_access(student_id, current_user, session)
 
     reports = await ReportRepository(session).get_by_student(student_id)
     return BaseResponse(
@@ -216,12 +267,10 @@ async def get_student_reports(
 async def get_error_book(
     student_id: int,
     session: AsyncSession = Depends(get_session),
-    current_user: dict = Depends(get_current_user),
+    current_user: UserRead = Depends(get_current_user),
 ) -> BaseResponse:
     """获取学生错题本."""
-    student = await StudentRepository(session).get_by_id(student_id)
-    if not student:
-        raise NotFoundException("学生不存在")
+    student = await _check_student_access(student_id, current_user, session)
 
     items = await ErrorBookItemRepository(session).get_by_student(student_id)
     return BaseResponse(
@@ -251,12 +300,10 @@ async def submit_answer(
     answer_text: str = "",
     answer_image_urls: list[str] | None = None,
     session: AsyncSession = Depends(get_session),
-    current_user: dict = Depends(get_current_user),
+    current_user: UserRead = Depends(get_current_user),
 ) -> BaseResponse:
     """提交作答（用于在线练习），创建 Submission 并触发判卷任务."""
-    student = await StudentRepository(session).get_by_id(student_id)
-    if not student:
-        raise NotFoundException("学生不存在")
+    student = await _check_student_access(student_id, current_user, session)
 
     exam = await ExamRepository(session).get_by_id(exam_id)
     if not exam:
@@ -289,12 +336,10 @@ async def submit_answer(
 async def export_error_book_pdf(
     student_id: int,
     session: AsyncSession = Depends(get_session),
-    current_user: dict = Depends(get_current_user),
+    current_user: UserRead = Depends(get_current_user),
 ) -> Response:
     """导出错题本 PDF."""
-    student = await StudentRepository(session).get_by_id(student_id)
-    if not student:
-        raise NotFoundException("学生不存在")
+    student = await _check_student_access(student_id, current_user, session)
 
     items = await ErrorBookItemRepository(session).get_by_student(student_id)
     pdf_bytes = await PDFExporter().export_error_book(student_id, items)
@@ -312,12 +357,10 @@ async def export_report_pdf(
     student_id: int,
     report_id: int,
     session: AsyncSession = Depends(get_session),
-    current_user: dict = Depends(get_current_user),
+    current_user: UserRead = Depends(get_current_user),
 ) -> Response:
     """导出诊断报告 PDF."""
-    student = await StudentRepository(session).get_by_id(student_id)
-    if not student:
-        raise NotFoundException("学生不存在")
+    student = await _check_student_access(student_id, current_user, session)
 
     report = await ReportRepository(session).get_by_id(report_id)
     if not report or report.student_id != student_id:
@@ -337,12 +380,10 @@ async def export_report_pdf(
 async def get_due_reviews(
     student_id: int,
     session: AsyncSession = Depends(get_session),
-    current_user: dict = Depends(get_current_user),
+    current_user: UserRead = Depends(get_current_user),
 ) -> BaseResponse:
     """获取今天需要复习的错题列表."""
-    student = await StudentRepository(session).get_by_id(student_id)
-    if not student:
-        raise NotFoundException("学生不存在")
+    student = await _check_student_access(student_id, current_user, session)
 
     now = datetime.now(timezone.utc)
     stmt = (
@@ -378,12 +419,10 @@ async def submit_review(
     error_book_item_id: int,
     quality: int,
     session: AsyncSession = Depends(get_session),
-    current_user: dict = Depends(get_current_user),
+    current_user: UserRead = Depends(get_current_user),
 ) -> BaseResponse:
     """提交复习结果，更新 SM-2 参数，安排下次复习."""
-    student = await StudentRepository(session).get_by_id(student_id)
-    if not student:
-        raise NotFoundException("学生不存在")
+    student = await _check_student_access(student_id, current_user, session)
 
     item = await ErrorBookItemRepository(session).get_by_id(error_book_item_id)
     if not item or item.student_id != student_id:
@@ -409,7 +448,7 @@ async def submit_review(
 async def get_student_exams(
     student_id: int,
     session: AsyncSession = Depends(get_session),
-    current_user: dict = Depends(get_current_user),
+    current_user: UserRead = Depends(get_current_user),
 ) -> BaseResponse:
     """获取学生的考试记录（基于 submissions + grading_results）."""
     from app.models.submission import Submission
@@ -443,7 +482,7 @@ async def get_student_exams(
 async def get_weak_knowledges(
     student_id: int,
     session: AsyncSession = Depends(get_session),
-    current_user: dict = Depends(get_current_user),
+    current_user: UserRead = Depends(get_current_user),
 ) -> BaseResponse:
     """获取学生薄弱知识点 TOP 列表."""
     stmt = (
@@ -477,7 +516,7 @@ async def mark_error_mastered(
     student_id: int,
     error_id: int,
     session: AsyncSession = Depends(get_session),
-    current_user: dict = Depends(get_current_user),
+    current_user: UserRead = Depends(get_current_user),
 ) -> BaseResponse:
     """标记错题已掌握."""
     item = await ErrorBookItemRepository(session).get_by_id(error_id)

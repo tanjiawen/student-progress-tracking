@@ -29,7 +29,6 @@ export const authApi = {
   me: () => api.get<User>('/auth/me'),
 
   logout: () => {
-    localStorage.removeItem('token')
     return Promise.resolve()
   },
 }

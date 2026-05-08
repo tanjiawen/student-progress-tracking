@@ -11,8 +11,12 @@ from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.core.database import async_session
+from app.core.logging import get_logger
+from app.core.redis_client import redis_client
 from app.core.security import decode_token
 from app.models.audit_log import AuditLog
+
+logger = get_logger(__name__)
 
 # 需要脱敏的字段名（大小写不敏感）
 _SENSITIVE_FIELDS = {
@@ -53,6 +57,10 @@ class AuditMiddleware(BaseHTTPMiddleware):
     SENSITIVE_METHODS = {"DELETE", "PUT", "PATCH"}
     SENSITIVE_PATH_PATTERNS = {"grade", "grading", "review", "audit"}
 
+    def __init__(self, app) -> None:
+        super().__init__(app)
+        self._pending_tasks: set[asyncio.Task] = set()
+
     async def dispatch(self, request: Request, call_next):
         start_time = time.perf_counter()
 
@@ -69,13 +77,22 @@ class AuditMiddleware(BaseHTTPMiddleware):
                     body = None
 
         # 从 Authorization Header 解析 user_id（避免在中间件中走完整的 Depends 链）
+        # Security fix V-011: validate token against Redis blacklist
         user_id: int | None = None
         try:
             auth_header = request.headers.get("authorization", "")
             if auth_header.startswith("Bearer "):
-                payload = decode_token(auth_header[7:])
+                token = auth_header[7:]
+                payload = decode_token(token)
                 if payload and payload.get("sub"):
-                    user_id = int(payload["sub"])
+                    # Check Redis blacklist
+                    import hashlib
+                    token_hash = hashlib.sha256(token.encode()).hexdigest()
+                    blacklisted = await redis_client.get(f"blacklist:{token_hash}")
+                    if blacklisted:
+                        user_id = None  # Token revoked, treat as anonymous
+                    else:
+                        user_id = int(payload["sub"])
         except Exception:
             user_id = None
 
@@ -88,7 +105,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
         is_sensitive = self._is_sensitive_request(request, response)
 
         if is_sensitive:
-            asyncio.create_task(
+            task = asyncio.create_task(
                 self._save_audit_log(
                     user_id=user_id,
                     action=request.method.lower(),
@@ -102,6 +119,9 @@ class AuditMiddleware(BaseHTTPMiddleware):
                     duration_ms=duration_ms,
                 )
             )
+            self._pending_tasks.add(task)
+            task.add_done_callback(self._pending_tasks.discard)
+            task.add_done_callback(self._on_audit_log_done)
 
         return response
 
@@ -126,13 +146,16 @@ class AuditMiddleware(BaseHTTPMiddleware):
         return "unknown"
 
     @staticmethod
+    def _on_audit_log_done(task: asyncio.Task) -> None:
+        """捕获审计日志写入异常并记录到结构化日志."""
+        exc = task.exception()
+        if exc:
+            logger.exception("audit_log_write_failed", error=str(exc))
+
+    @staticmethod
     async def _save_audit_log(**kwargs: Any) -> None:
         """异步写入审计日志，失败时不影响主请求."""
-        try:
-            async with async_session() as session:
-                log = AuditLog(**kwargs)
-                session.add(log)
-                await session.commit()
-        except Exception:
-            # 审计日志写入失败绝不应影响主业务
-            pass
+        async with async_session() as session:
+            log = AuditLog(**kwargs)
+            session.add(log)
+            await session.commit()

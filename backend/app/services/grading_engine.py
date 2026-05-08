@@ -7,9 +7,9 @@ import json
 import re
 from typing import Any
 
+from app.ai.gateway import LLMGateway, LLMMessage, LLMRequest
 from app.ai.openai_vision import OpenAIVisionClient
 from app.ai.qwen_vl import QwenVLClient
-from app.core.config import settings
 
 
 class GradingResult:
@@ -80,6 +80,7 @@ class GradingEngine:
     def __init__(self):
         self.qwen = QwenVLClient()
         self.gpt4v = OpenAIVisionClient()
+        self.gateway = LLMGateway()
         self.model = "deepseek-r1"  # 默认使用 DeepSeek 进行判卷推理
 
     async def grade(
@@ -323,36 +324,21 @@ class GradingEngine:
 """
 
     async def _call_llm(self, prompt: str) -> str:
-        """调用 LLM"""
-        import httpx
-
-        api_key = settings.DEEPSEEK_API_KEY or settings.OPENAI_API_KEY or ""
-        base_url = settings.DEEPSEEK_BASE_URL or "https://api.deepseek.com/v1"
-
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-        }
-
-        payload = {
-            "model": self.model,
-            "messages": [
-                {"role": "system", "content": "你是一位专业的学科判卷专家，擅长数学、物理等理科题目的评分。输出严格的 JSON 格式。"},
-                {"role": "user", "content": prompt},
+        """调用 LLM（通过 Gateway 复用连接）"""
+        request = LLMRequest(
+            messages=[
+                LLMMessage(
+                    role="system",
+                    content="你是一位专业的学科判卷专家，擅长数学、物理等理科题目的评分。输出严格的 JSON 格式。",
+                ),
+                LLMMessage(role="user", content=prompt),
             ],
-            "temperature": 0.2,
-            "max_tokens": 2048,
-        }
-
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            response = await client.post(
-                f"{base_url}/chat/completions",
-                headers=headers,
-                json=payload,
-            )
-            response.raise_for_status()
-            data = response.json()
-            return data["choices"][0]["message"]["content"]
+            model=self.model,
+            temperature=0.2,
+            max_tokens=2048,
+        )
+        response = await self.gateway.chat(request, preferred_provider="deepseek")
+        return response.content
 
     @staticmethod
     def _parse_grading_response(text: str) -> dict[str, Any]:

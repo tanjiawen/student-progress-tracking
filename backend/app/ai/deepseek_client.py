@@ -17,8 +17,9 @@ class DeepSeekGatewayClient:
 
     def __init__(self, base_url: str = "http://localhost:8787"):
         self.base_url = base_url.rstrip("/")
+        # Fix H-03: reduce timeout from 300s to 60s to prevent slow requests from exhausting connection pool
         self.client = httpx.AsyncClient(
-            timeout=httpx.Timeout(300.0, connect=10.0),
+            timeout=httpx.Timeout(60.0, connect=10.0),
             headers={"Content-Type": "application/json"},
         )
 

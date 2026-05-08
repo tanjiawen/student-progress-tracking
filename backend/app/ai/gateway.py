@@ -417,12 +417,13 @@ class LLMGateway:
             )
 
         # Ollama (本地)
-        self._add_provider(
-            ProviderType.OLLAMA,
-            "ollama",
-            "http://localhost:11434/v1",
-            "qwen2.5:14b",
-        )
+        if settings.OLLAMA_BASE_URL:
+            self._add_provider(
+                ProviderType.OLLAMA,
+                "ollama",
+                settings.OLLAMA_BASE_URL,
+                "qwen2.5:14b",
+            )
 
     def _add_provider(
         self,

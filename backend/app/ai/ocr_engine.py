@@ -32,8 +32,9 @@ class OCREngine:
 
         # 配置可用 provider
         self.providers = []
-        if settings.OPENAI_API_KEY or settings.DEEPSEEK_API_KEY:
+        if settings.DASHSCOPE_API_KEY:
             self.providers.append("qwen-vl")
+        if settings.OPENAI_API_KEY:
             self.providers.append("gpt-4o")
         if settings.MATHPIX_APP_ID and settings.MATHPIX_API_KEY:
             self.providers.append("mathpix")

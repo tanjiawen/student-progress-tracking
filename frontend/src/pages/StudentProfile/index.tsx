@@ -3,9 +3,8 @@ import { Card, Row, Col, List, Progress, Tag, Table, Skeleton, Empty, message } 
 import ReactECharts from 'echarts-for-react'
 import { useParams } from 'react-router-dom'
 import { studentsApi } from '@/api/students'
+import { useAuthStore } from '@/store/authStore'
 import type { Student, KnowledgeState, ExamRecord, WeakKnowledge } from '@/types'
-
-
 
 const levelColor: Record<string, string> = {
   excellent: 'green',
@@ -23,13 +22,14 @@ const levelText: Record<string, string> = {
 
 const StudentProfile: React.FC = () => {
   const { studentId } = useParams<{ studentId: string }>()
+  const { user } = useAuthStore()
   const [loading, setLoading] = useState(true)
   const [student, setStudent] = useState<Student | null>(null)
   const [knowledgeState, setKnowledgeState] = useState<KnowledgeState[]>([])
   const [examRecords, setExamRecords] = useState<ExamRecord[]>([])
   const [weakKnowledges, setWeakKnowledges] = useState<WeakKnowledge[]>([])
 
-  const id = Number(studentId)
+  const id = Number(studentId) || user?.id
 
   useEffect(() => {
     if (!id) return

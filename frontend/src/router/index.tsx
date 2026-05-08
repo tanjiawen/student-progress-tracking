@@ -1,32 +1,39 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuthStore } from '@/store/authStore'
 import { Spin } from 'antd'
-import { useEffect, useState } from 'react'
+import React, { Suspense, useEffect, useState } from 'react'
 
-import Login from '@/pages/Login'
-import MainLayout from '@/layouts/MainLayout'
-import Dashboard from '@/pages/Dashboard'
-import ExamUpload from '@/pages/ExamUpload'
-import ExamDetail from '@/pages/ExamDetail'
-import StudentProfile from '@/pages/StudentProfile'
-import ErrorBook from '@/pages/ErrorBook'
-import ReportView from '@/pages/ReportView'
-import GradingReview from '@/pages/GradingReview'
-import KnowledgeManage from '@/pages/KnowledgeManage'
-import ClassManage from '@/pages/ClassManage'
-import ExercisePage from '@/pages/ExercisePage'
+const Login = React.lazy(() => import('@/pages/Login'))
+const MainLayout = React.lazy(() => import('@/layouts/MainLayout'))
+const Dashboard = React.lazy(() => import('@/pages/Dashboard'))
+const ExamUpload = React.lazy(() => import('@/pages/ExamUpload'))
+const ExamDetail = React.lazy(() => import('@/pages/ExamDetail'))
+const StudentProfile = React.lazy(() => import('@/pages/StudentProfile'))
+const ErrorBook = React.lazy(() => import('@/pages/ErrorBook'))
+const ReportView = React.lazy(() => import('@/pages/ReportView'))
+const GradingReview = React.lazy(() => import('@/pages/GradingReview'))
+const KnowledgeManage = React.lazy(() => import('@/pages/KnowledgeManage'))
+const ClassManage = React.lazy(() => import('@/pages/ClassManage'))
+const ExercisePage = React.lazy(() => import('@/pages/ExercisePage'))
+
+const PageFallback = (
+  <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+    <Spin size="large" tip="页面加载中..." />
+  </div>
+)
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, token } = useAuthStore()
+  const { isAuthenticated } = useAuthStore()
   const [checked, setChecked] = useState(false)
 
   useEffect(() => {
-    if (token && !isAuthenticated) {
+    // Security fix V-017: always try refresh via HttpOnly cookie
+    if (!isAuthenticated) {
       useAuthStore.getState().refresh().finally(() => setChecked(true))
     } else {
       setChecked(true)
     }
-  }, [token, isAuthenticated])
+  }, [isAuthenticated])
 
   if (!checked) {
     return (
@@ -72,7 +79,9 @@ export default function AppRouter() {
         path="/login"
         element={
           <PublicRoute>
-            <Login />
+            <Suspense fallback={PageFallback}>
+              <Login />
+            </Suspense>
           </PublicRoute>
         }
       />
@@ -80,24 +89,28 @@ export default function AppRouter() {
         path="/"
         element={
           <RequireAuth>
-            <MainLayout />
+            <Suspense fallback={PageFallback}>
+              <MainLayout />
+            </Suspense>
           </RequireAuth>
         }
       >
-        <Route index element={<Dashboard />} />
-        <Route path="exams" element={<ExamUpload />} />
-        <Route path="exams/:examId" element={<ExamDetail />} />
-        <Route path="students/:studentId" element={<StudentProfile />} />
-        <Route path="error-book" element={<ErrorBook />} />
-        <Route path="reports" element={<ReportView />} />
-        <Route path="grading" element={<GradingReview />} />
-        <Route path="knowledge" element={<KnowledgeManage />} />
-        <Route path="classes" element={<ClassManage />} />
+        <Route index element={<Suspense fallback={PageFallback}><Dashboard /></Suspense>} />
+        <Route path="exams" element={<Suspense fallback={PageFallback}><ExamUpload /></Suspense>} />
+        <Route path="exams/:examId" element={<Suspense fallback={PageFallback}><ExamDetail /></Suspense>} />
+        <Route path="students/:studentId" element={<Suspense fallback={PageFallback}><StudentProfile /></Suspense>} />
+        <Route path="error-book" element={<Suspense fallback={PageFallback}><ErrorBook /></Suspense>} />
+        <Route path="reports" element={<Suspense fallback={PageFallback}><ReportView /></Suspense>} />
+        <Route path="grading" element={<Suspense fallback={PageFallback}><GradingReview /></Suspense>} />
+        <Route path="knowledge" element={<Suspense fallback={PageFallback}><KnowledgeManage /></Suspense>} />
+        <Route path="classes" element={<Suspense fallback={PageFallback}><ClassManage /></Suspense>} />
         <Route
           path="exercise"
           element={
             <RoleGuard allowedRoles={['student']}>
-              <ExercisePage />
+              <Suspense fallback={PageFallback}>
+                <ExercisePage />
+              </Suspense>
             </RoleGuard>
           }
         />

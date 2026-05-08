@@ -11,6 +11,7 @@ from app.models.knowledge_point import KnowledgePoint
 from app.models.question_template import QuestionTemplate
 from app.repositories.knowledge_point import KnowledgePointRepository
 from app.repositories.question_template import QuestionTemplateRepository
+from app.services.grading_engine import GradingEngine
 from app.services.question_vector_service import QuestionVectorService
 
 logger = logging.getLogger(__name__)
@@ -331,11 +332,8 @@ class ExerciseGenerator:
             generated_answer = answer.strip().lower()
             verified_answer = response.content.strip().lower()
 
-            # 简单比较
-            match = generated_answer == verified_answer
-            if not match:
-                # 尝试更宽松的比较
-                match = generated_answer in verified_answer or verified_answer in generated_answer
+            # 使用判卷引擎的等价判断逻辑进行答案验证
+            match = GradingEngine._answers_equivalent(generated_answer, verified_answer)
 
             if match:
                 return {"status": "verified", "verified_answer": verified_answer}

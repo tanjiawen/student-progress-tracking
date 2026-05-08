@@ -165,15 +165,13 @@ class QuestionVectorService:
     ) -> list[dict]:
         """按知识点过滤搜索.
 
-        由于需要向量才能搜索，这里构造一个零向量并应用过滤条件，
-        或者更合理的做法是利用 Qdrant 的 scroll API。
-        这里使用 scroll 获取该知识点下的题目。
+        使用 Qdrant 的 scroll API 进行纯过滤检索，避免零向量查询。
         """
-        return await self.qdrant.search_similar(
-            vector=[0.0] * self.qdrant.vector_size,
-            limit=limit,
+        results, _ = await self.qdrant.scroll(
             filters={"knowledge_point_ids": [kp_id]},
+            limit=limit,
         )
+        return results
 
     async def _build_text(self, question: QuestionTemplate) -> str:
         """构建用于 Embedding 的文本（供 batch 使用）."""

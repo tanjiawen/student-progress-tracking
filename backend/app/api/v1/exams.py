@@ -9,6 +9,7 @@ from collections import defaultdict
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, File, Form, Response, UploadFile, status
+from sqlalchemy.orm import selectinload
 from sqlmodel import func, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -93,9 +94,18 @@ async def upload_exam(
         raise BadRequestException("仅支持 PDF、PNG、JPG 格式")
 
     content_type = file.content_type or ""
+    allowed_content_types = {
+        "application/pdf",
+        "image/png",
+        "image/jpeg",
+        "image/jpg",
+    }
     is_pdf = content_type == "application/pdf" or file.filename.lower().endswith(".pdf")
-    is_image = content_type.startswith("image/") or ext in {".png", ".jpg", ".jpeg"}
+    is_image = content_type in {"image/png", "image/jpeg", "image/jpg"} or ext in {".png", ".jpg", ".jpeg"}
 
+    # Reject known-bypass content types (e.g. image/svg+xml)
+    if content_type and content_type not in allowed_content_types:
+        raise BadRequestException("仅支持 PDF 或图片格式（jpg/png）")
     if not is_pdf and not is_image:
         raise BadRequestException("仅支持 PDF 或图片格式（jpg/png）")
 
@@ -220,19 +230,22 @@ async def list_exams(
     total_result = await session.exec(total_stmt)
     total = total_result.one()
 
+    list_stmt = list_stmt.options(selectinload(Exam.questions), selectinload(Exam.submissions))
     list_result = await session.exec(list_stmt)
     exams = list(list_result.all())
 
-    # 组装学科名称
-    subject_repo = SubjectRepository(session)
-    subject_ids = {e.subject_id for e in exams}
-    subjects = {}
-    for sid in subject_ids:
-        sub = await subject_repo.get_by_id(sid) if sid else None
-        if sub:
-            subjects[sid] = sub.name
+    # Fetch subject names in batch to avoid N+1
+    subject_ids = [e.subject_id for e in exams if e.subject_id]
+    subject_map = {}
+    if subject_ids:
+        sub_stmt = select(Subject.id, Subject.name).where(Subject.id.in_(subject_ids))
+        sub_result = await session.exec(sub_stmt)
+        subject_map = {row[0]: row[1] for row in sub_result.all()}
 
-    items = [_exam_to_dict(e, subject_name=subjects.get(e.subject_id, "")) for e in exams]
+    items = [
+        _exam_to_dict(e, subject_name=subject_map.get(e.subject_id, ""))
+        for e in exams
+    ]
     total_pages = (total + limit - 1) // limit if limit > 0 else 0
     page = skip // limit + 1 if limit > 0 else 1
 
@@ -254,12 +267,20 @@ async def get_exam(
     current_user: dict = Depends(get_current_user),
 ) -> BaseResponse:
     """获取考试详情（含题目列表）."""
-    exam = await ExamRepository(session).get_by_id(exam_id)
+    stmt = (
+        select(Exam)
+        .options(selectinload(Exam.questions), selectinload(Exam.submissions))
+        .where(Exam.id == exam_id)
+    )
+    result = await session.exec(stmt)
+    exam = result.first()
     if not exam:
         raise NotFoundException("考试不存在")
 
     questions = await ExamQuestionRepository(session).get_by_exam_ordered(exam_id)
-    subject = await SubjectRepository(session).get_by_id(exam.subject_id) if exam.subject_id else None
+
+    subject_result = await session.exec(select(Subject).where(Subject.id == exam.subject_id))
+    subject = subject_result.first()
 
     return BaseResponse(
         data={
@@ -477,30 +498,39 @@ async def export_exam_results_pdf(
     if not exam:
         raise NotFoundException("考试不存在")
 
-    grading_results = await GradingResultRepository(session).get_by_exam(exam_id)
+    # 使用显式 JOIN 单查询避免 N+1
+    stmt = (
+        select(
+            Student.id.label("student_id"),
+            Student.student_number,
+            User.real_name,
+            ExamQuestion.question_type,
+            GradingResult.score,
+        )
+        .join(Submission, GradingResult.submission_id == Submission.id)
+        .join(Student, Submission.student_id == Student.id)
+        .join(User, Student.user_id == User.id)
+        .join(ExamQuestion, Submission.exam_question_id == ExamQuestion.id)
+        .where(Submission.exam_id == exam_id)
+    )
+    result = await session.exec(stmt)
+    rows = list(result.all())
 
-    # 按学生聚合分数
     student_scores: dict[int, dict] = {}
-    for gr in grading_results:
-        sub = await session.get(Submission, gr.submission_id)
-        if not sub:
-            continue
-        sid = sub.student_id
+    for row in rows:
+        sid = row.student_id
         if sid not in student_scores:
-            student = await StudentRepository(session).get_by_id(sid)
-            user = await session.get(User, student.user_id) if student else None
             student_scores[sid] = {
                 "student_id": sid,
-                "student_number": student.student_number if student else "",
-                "student_name": user.real_name if user else "",
+                "student_number": row.student_number or "",
+                "student_name": row.real_name or "",
                 "objective_score": 0.0,
                 "subjective_score": 0.0,
                 "total_score": 0.0,
             }
-        # 简单区分：客观题（选择题）与主观题
-        eq = await session.get(ExamQuestion, sub.exam_question_id)
-        score = float(gr.score) if gr.score else 0.0
-        if eq and eq.question_type.value == "choice":
+        score = float(row.score) if row.score is not None else 0.0
+        qtype = str(row.question_type) if row.question_type else ""
+        if qtype == "choice":
             student_scores[sid]["objective_score"] += score
         else:
             student_scores[sid]["subjective_score"] += score

@@ -30,3 +30,8 @@ class ForbiddenException(APIException):
 class RateLimitException(APIException):
     def __init__(self, detail: str = "Rate limit exceeded"):
         super().__init__(status.HTTP_429_TOO_MANY_REQUESTS, detail, "rate_limit")
+
+
+class ConfigurationError(APIException):
+    def __init__(self, detail: str = "Configuration error"):
+        super().__init__(status.HTTP_500_INTERNAL_SERVER_ERROR, detail, "configuration_error")

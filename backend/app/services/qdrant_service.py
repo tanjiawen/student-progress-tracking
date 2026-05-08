@@ -199,6 +199,45 @@ class QdrantService:
         )
         return result.count
 
+    async def scroll(
+        self,
+        filters: dict | None = None,
+        limit: int = 10,
+        offset: int | str | None = None,
+    ) -> tuple[list[dict], int | str | None]:
+        """纯过滤检索（无需向量）.
+
+        Args:
+            filters: 过滤条件
+            limit: 返回数量上限
+            offset: 分页偏移
+
+        Returns:
+            (结果列表, 下一页 offset)
+        """
+        qdrant_filter = self._build_filter(filters, exclude_id=None)
+
+        results, next_offset = await asyncio.to_thread(
+            self.client.scroll,
+            collection_name=self.collection_name,
+            scroll_filter=qdrant_filter,
+            limit=limit,
+            offset=offset,
+            with_payload=True,
+            with_vectors=False,
+        )
+
+        return (
+            [
+                {
+                    "question_id": res.id,
+                    "payload": res.payload,
+                }
+                for res in results
+            ],
+            next_offset,
+        )
+
     def _build_filter(
         self,
         filters: dict | None,

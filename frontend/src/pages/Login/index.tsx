@@ -55,7 +55,7 @@ function Login() {
       <Card style={{ width: 400, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
           <Title level={3} style={{ margin: 0 }}>学生学情跟踪系统</Title>
-          <Typography.Text type="secondary">v0.0.1</Typography.Text>
+          {/* Security fix V-021: removed version number display */}
         </div>
         <Tabs activeKey={activeTab} onChange={setActiveTab} centered items={[
           {

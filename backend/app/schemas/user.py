@@ -17,8 +17,14 @@ class UserBase(BaseModel):
     tier: str = "default"  # free/standard/premium
 
 
-class UserCreate(UserBase):
+class UserCreate(BaseModel):
+    # Security fix V-002: removed role and is_active — server-controlled only
+    username: str = Field(..., min_length=3, max_length=50)
+    email: EmailStr
     password: str = Field(..., min_length=6, max_length=128)
+    full_name: str | None = Field(default=None, max_length=100)
+    phone: str | None = Field(default=None, max_length=20)
+    avatar_url: str | None = None
 
 
 class UserRead(UserBase):

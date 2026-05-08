@@ -1,7 +1,7 @@
 """Authentication API tests."""
 
 from __future__ import annotations
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from httpx import AsyncClient
@@ -19,9 +19,8 @@ async def test_register_success(client: AsyncClient) -> None:
         json={
             "username": "newuser",
             "email": "new@example.com",
-            "password": "Password123",
+            "password": "Password123!",
             "full_name": "New User",
-            "role": "teacher",
         },
     )
     assert response.status_code == 201
@@ -42,7 +41,7 @@ async def test_register_duplicate_username(
         json={
             "username": "testuser",
             "email": "different@example.com",
-            "password": "Password123",
+            "password": "Password123!",
         },
     )
     assert response.status_code == 400
@@ -56,7 +55,7 @@ async def test_login_success(client: AsyncClient, test_user: User) -> None:
     """Valid login should return tokens."""
     response = await client.post(
         "/api/v1/auth/login",
-        data={"username": "testuser", "password": "testpass123"},
+        json={"username": "testuser", "password": "testpass123"},
     )
     assert response.status_code == 200
     data = response.json()
@@ -70,7 +69,7 @@ async def test_login_wrong_password(client: AsyncClient, test_user: User) -> Non
     """Wrong password should return 401."""
     response = await client.post(
         "/api/v1/auth/login",
-        data={"username": "testuser", "password": "wrongpassword"},
+        json={"username": "testuser", "password": "wrongpassword"},
     )
     try:
         response.raise_for_status()
@@ -83,6 +82,8 @@ async def test_login_wrong_password(client: AsyncClient, test_user: User) -> Non
 @patch("app.api.v1.auth.redis_client")
 async def test_refresh_token(mock_redis, client: AsyncClient, test_user: User) -> None:
     """Refreshing with a valid refresh token should return a new access token."""
+    mock_redis.get = AsyncMock(return_value=None)
+    mock_redis.setex = AsyncMock(return_value=True)
     refresh = create_refresh_token(subject=test_user.id)
     response = await client.post(
         "/api/v1/auth/refresh",

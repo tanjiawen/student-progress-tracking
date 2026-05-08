@@ -1,12 +1,14 @@
 import hashlib
-import re
 from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import APIRouter, Body, Depends, status
+import uuid
+
+from fastapi import APIRouter, Body, Depends, Request, Response, status
 from pydantic import BaseModel
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from app.core.captcha import create_captcha, verify_captcha
 from app.core.config import settings
 from app.core.database import get_session
 from app.core.dependencies import get_current_user, get_raw_token
@@ -17,6 +19,7 @@ from app.core.security import (
     create_refresh_token,
     decode_token,
     get_password_hash,
+    validate_password,
 )
 from app.models.user import User, UserRole
 from app.repositories.user import UserRepository
@@ -25,28 +28,26 @@ from app.schemas.user import Token, UserCreate, UserRead
 router = APIRouter()
 
 
-def validate_password(password: str) -> None:
-    """密码策略：最小 8 位，包含大小写+数字."""
-    if len(password) < 8:
-        raise BadRequestException("密码至少需要 8 位字符")
-    if not re.search(r"[A-Z]", password):
-        raise BadRequestException("密码需要包含至少一个大写字母")
-    if not re.search(r"[a-z]", password):
-        raise BadRequestException("密码需要包含至少一个小写字母")
-    if not re.search(r"\d", password):
-        raise BadRequestException("密码需要包含至少一个数字")
-
-
 class LoginRequest(BaseModel):
     username: str
     password: str
+    captcha_id: str | None = None
+    captcha_code: str | None = None
 
 
 @router.post("/login")
 async def login(
     data: LoginRequest,
+    request: Request,
+    response: Response,
     session: AsyncSession = Depends(get_session),
 ) -> Any:
+    # Security fix V-013: validate captcha if provided
+    if data.captcha_id and data.captcha_code:
+        valid = await verify_captcha(data.captcha_id, data.captcha_code)
+        if not valid:
+            raise UnauthorizedException("验证码错误或已过期")
+
     repo = UserRepository(session)
     user = await repo.authenticate(data.username, data.password)
     if not user:
@@ -56,6 +57,18 @@ async def login(
 
     access_token = create_access_token(subject=user.id)
     refresh_token = create_refresh_token(subject=user.id)
+
+    # Security fix V-017: set HttpOnly cookie for XSS protection
+    # Also keep token in JSON body for backward compatibility (tests, mobile apps)
+    secure_cookie = request.url.scheme == "https"
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        secure=secure_cookie,
+        samesite="lax",
+        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+    )
 
     return {
         "access_token": access_token,
@@ -100,8 +113,8 @@ async def register(
         real_name=user_in.full_name,
         phone=user_in.phone,
         avatar_url=user_in.avatar_url,
-        role=UserRole(user_in.role),
-        is_active=user_in.is_active,
+        role=UserRole.student,  # Security fix V-002: force student role
+        is_active=True,         # Security fix V-002: force active on register
     )
     await repo.create(db_user)
 
@@ -163,11 +176,25 @@ async def get_me(current_user: UserRead = Depends(get_current_user)) -> Any:
     return current_user
 
 
+@router.get("/captcha")
+async def get_captcha() -> Response:
+    """获取图形验证码."""
+    captcha_id = str(uuid.uuid4())
+    _, image_bytes = await create_captcha(captcha_id)
+    return Response(
+        content=image_bytes,
+        media_type="image/png",
+        headers={"X-Captcha-ID": captcha_id},
+    )
+
+
 @router.post("/logout")
 async def logout(
+    response: Response,
     access_token: str | None = Depends(get_raw_token),
     refresh_token: str | None = Body(None),
 ) -> dict[str, str]:
+    """Logout and clear HttpOnly cookie."""
     now = datetime.now(UTC).timestamp()
 
     if access_token:
@@ -190,4 +217,6 @@ async def logout(
                     token_hash = hashlib.sha256(refresh_token.encode()).hexdigest()
                     await redis_client.setex(f"blacklist:{token_hash}", ttl, "1")
 
+    # Security fix V-017: clear HttpOnly cookie
+    response.delete_cookie(key="access_token")
     return {"message": "Successfully logged out"}
