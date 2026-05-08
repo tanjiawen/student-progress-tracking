@@ -14,6 +14,7 @@ import {
 } from '@ant-design/icons'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '@/store/authStore'
+import packageJson from '../../package.json'
 
 const { Header, Sider, Content } = Layout
 
@@ -78,6 +79,18 @@ const MainLayout: React.FC = () => {
           items={menuItems}
           onClick={({ key }) => navigate(key)}
         />
+        <div
+          style={{
+            position: 'absolute',
+            bottom: 12,
+            width: '100%',
+            textAlign: 'center',
+            fontSize: 12,
+            color: '#999',
+          }}
+        >
+          v{packageJson.version}
+        </div>
       </Sider>
       <Layout>
         <Header
